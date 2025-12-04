@@ -367,6 +367,15 @@ export abstract class AbstractSqliteQueryRunner
             downQueries.push(deleteQuery)
         }
 
+        for (const check of table.checks) {
+            upQueries.push(
+                await this.insertCheckConstraintMetadata(table, check),
+            )
+            downQueries.push(
+                await this.dropCheckConstraintMetadata(table, check),
+            )
+        }
+
         await this.executeQueries(upQueries, downQueries)
     }
 
@@ -428,6 +437,13 @@ export abstract class AbstractSqliteQueryRunner
 
             upQueries.push(deleteQuery)
             downQueries.push(insertQuery)
+        }
+
+        for (const check of table.checks) {
+            upQueries.push(await this.dropCheckConstraintMetadata(table, check))
+            downQueries.push(
+                await this.insertCheckConstraintMetadata(table, check),
+            )
         }
 
         await this.executeQueries(upQueries, downQueries)
@@ -1047,6 +1063,13 @@ export abstract class AbstractSqliteQueryRunner
             changedTable.addCheckConstraint(checkConstraint),
         )
         await this.recreateTable(changedTable, table)
+
+        for (const check of checkConstraints) {
+            await this.executeQueries(
+                await this.insertCheckConstraintMetadata(table, check),
+                await this.dropCheckConstraintMetadata(table, check),
+            )
+        }
     }
 
     /**
@@ -1100,6 +1123,13 @@ export abstract class AbstractSqliteQueryRunner
         )
 
         await this.recreateTable(changedTable, table)
+
+        for (const check of checkConstraints) {
+            await this.executeQueries(
+                await this.dropCheckConstraintMetadata(table, check),
+                await this.insertCheckConstraintMetadata(table, check),
+            )
+        }
     }
 
     /**
@@ -1537,6 +1567,19 @@ export abstract class AbstractSqliteQueryRunner
             return []
         }
 
+        let dbCheckMetadata: ObjectLiteral[] = []
+        const metadataTableName = this.getTypeormMetadataTableName()
+        if (await this.hasTable(metadataTableName)) {
+            const metadataCondition = dbTables
+                .map(({ name }) => `("table" = '${name}')`)
+                .join(" OR ")
+            if (metadataCondition) {
+                dbCheckMetadata = await this.query(
+                    `SELECT * FROM ${this.escapePath(metadataTableName)} WHERE "type" = '${MetadataTableType.CHECK_CONSTRAINT}' AND (${metadataCondition})`,
+                )
+            }
+        }
+
         // create table schemas for loaded tables
         return Promise.all(
             dbTables.map(async (dbTable) => {
@@ -1832,10 +1875,18 @@ export abstract class AbstractSqliteQueryRunner
                 const regexp =
                     /CONSTRAINT "([^"]*)" CHECK ?(\(.*?\))([,]|[)]$)/g
                 while ((result = regexp.exec(sql)) !== null) {
+                    const constraintName = result[1]
+                    const metadataRow = dbCheckMetadata.find(
+                        (m) =>
+                            m["name"] === constraintName &&
+                            m["table"] === dbTable["name"],
+                    )
                     table.checks.push(
                         new TableCheck({
-                            name: result[1],
-                            expression: result[2],
+                            name: constraintName,
+                            expression: metadataRow
+                                ? metadataRow["value"]
+                                : result[2],
                         }),
                     )
                 }

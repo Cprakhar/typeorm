@@ -80,8 +80,8 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         // In Spanner queries against the INFORMATION_SCHEMA can be used in a read-only transaction,
         // but not in a read-write transaction.
         const isUsingTransactions =
-            !(this.dataSource.driver.options.type === "cockroachdb") &&
-            !(this.dataSource.driver.options.type === "spanner") &&
+            this.dataSource.driver.options.type !== "cockroachdb" &&
+            this.dataSource.driver.options.type !== "spanner" &&
             this.dataSource.options.migrationsTransactionMode !== "none"
 
         await this.queryRunner.beforeMigration()
@@ -139,9 +139,10 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
     ): Promise<void> {
         if (
             this.viewEntityToSyncMetadatas.length > 0 ||
-            this.hasGeneratedColumns()
+            this.hasGeneratedColumns() ||
+            this.hasCheckConstraints()
         ) {
-            await this.createTypeormMetadataTable(queryRunner)
+            await queryRunner.createTypeormMetadataTable()
         }
     }
 
@@ -221,6 +222,21 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
     }
 
     /**
+     * Checks if there are check constraints that require typeorm_metadata tracking
+     * (i.e. for drivers that store check constraint metadata in typeorm_metadata).
+     */
+    protected hasCheckConstraints(): boolean {
+        if (
+            DriverUtils.isMySQLFamily(this.dataSource.driver) ||
+            this.dataSource.driver.options.type === "aurora-mysql"
+        )
+            return false
+        return this.entityToSyncMetadatas.some(
+            (metadata) => metadata.checks.length > 0,
+        )
+    }
+
+    /**
      * Executes schema sync operations in a proper order.
      * Order of operations matter here.
      */
@@ -239,6 +255,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         await this.updatePrimaryKeys()
         await this.updateExistColumns()
         await this.createNewIndices()
+        await this.recreateModifiedChecks()
         await this.createNewChecks()
         await this.createNewExclusions()
         await this.createCompositeUniqueConstraints()
@@ -553,7 +570,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
 
     protected async dropOldExclusions(): Promise<void> {
         // Only PostgreSQL supports exclusion constraints
-        if (!(this.dataSource.driver.options.type === "postgres")) return
+        if (this.dataSource.driver.options.type !== "postgres") return
 
         for (const metadata of this.entityToSyncMetadatas) {
             const table = this.tables.find(
@@ -1072,6 +1089,59 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         }
     }
 
+    /**
+     * Recreates modified CHECK constraints.
+     */
+    protected async recreateModifiedChecks(): Promise<void> {
+        // Mysql does not support check constraints
+        if (
+            DriverUtils.isMySQLFamily(this.dataSource.driver) ||
+            this.dataSource.driver.options.type === "aurora-mysql"
+        )
+            return
+
+        for (const metadata of this.entityToSyncMetadatas) {
+            const table = await this.queryRunner.getTable(
+                this.getTablePath(metadata),
+            )
+            if (!table) continue
+
+            const modifiedChecks: Array<{
+                oldCheck: TableCheck
+                newCheck: TableCheck
+            }> = []
+
+            for (const checkMetadata of metadata.checks) {
+                const existingCheck = table.checks.find(
+                    (tableCheck) => tableCheck.name === checkMetadata.name,
+                )
+
+                if (!existingCheck?.expression || !checkMetadata.expression)
+                    continue
+
+                if (existingCheck.expression !== checkMetadata.expression) {
+                    modifiedChecks.push({
+                        oldCheck: existingCheck,
+                        newCheck: TableCheck.create(checkMetadata),
+                    })
+                }
+            }
+
+            if (modifiedChecks.length === 0) continue
+
+            const checksToModify = modifiedChecks.map((m) => m.oldCheck)
+            this.dataSource.logger.logSchemaBuild(
+                `updating check constraints: ${checksToModify
+                    .map((check) => `"${check.name}"`)
+                    .join(", ")} in table "${table.name}"`,
+            )
+            await this.queryRunner.dropCheckConstraints(table, checksToModify)
+
+            const newChecks = modifiedChecks.map((m) => m.newCheck)
+            await this.queryRunner.createCheckConstraints(table, newChecks)
+        }
+    }
+
     protected async createNewChecks(): Promise<void> {
         // Mysql does not support check constraints
         if (
@@ -1081,9 +1151,8 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             return
 
         for (const metadata of this.entityToSyncMetadatas) {
-            const table = this.tables.find(
-                (table) =>
-                    this.getTablePath(table) === this.getTablePath(metadata),
+            const table = await this.queryRunner.getTable(
+                this.getTablePath(metadata),
             )
             if (!table) continue
 
@@ -1149,7 +1218,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
      */
     protected async createNewExclusions(): Promise<void> {
         // Only PostgreSQL supports exclusion constraints
-        if (!(this.dataSource.driver.options.type === "postgres")) return
+        if (this.dataSource.driver.options.type !== "postgres") return
 
         for (const metadata of this.entityToSyncMetadatas) {
             const table = this.tables.find(
