@@ -2027,7 +2027,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
         // Check constraints are supported in MySQL 8.0.16+ and MariaDB 10.2.1+
         const isMariaDb = this.driver.options.type === "mariadb"
         const supportedVersion = isMariaDb ? "10.2.1" : "8.0.16"
-        
+
         if (!VersionUtils.isGreaterOrEqual(this.driver.version, supportedVersion)) {
             throw new TypeORMError(
                 `Check constraints are not supported in ${isMariaDb ? "MariaDB" : "MySQL"} versions before ${supportedVersion}.`
@@ -3442,6 +3442,8 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
         )
             ? checkConstraintOrName.name
             : checkConstraintOrName
+        // MySQL supports both DROP CHECK and DROP CONSTRAINT for check constraints.
+        // We use DROP CHECK for compatibility with MySQL 8.0.16-8.0.18
         return new Query(
             `ALTER TABLE ${this.escapePath(
                 table,
