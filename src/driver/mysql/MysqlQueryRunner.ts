@@ -3442,12 +3442,14 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
         )
             ? checkConstraintOrName.name
             : checkConstraintOrName
-        // MySQL supports both DROP CHECK and DROP CONSTRAINT for check constraints.
-        // We use DROP CHECK for compatibility with MySQL 8.0.16-8.0.18
+        // MariaDB uses DROP CONSTRAINT for check constraints
+        // MySQL uses DROP CHECK (for compatibility with MySQL 8.0.16-8.0.18)
+        const isMariaDb = this.driver.options.type === "mariadb"
+        const dropKeyword = isMariaDb ? "CONSTRAINT" : "CHECK"
         return new Query(
             `ALTER TABLE ${this.escapePath(
                 table,
-            )} DROP CHECK \`${checkConstraintName}\``,
+            )} DROP ${dropKeyword} \`${checkConstraintName}\``,
         )
     }
 
