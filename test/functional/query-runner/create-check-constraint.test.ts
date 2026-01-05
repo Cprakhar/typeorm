@@ -23,8 +23,16 @@ describe("query runner > create check constraint", () => {
     it("should correctly create check constraint and revert creation", () =>
         Promise.all(
             connections.map(async (connection) => {
-                // Mysql does not support check constraints.
-                if (DriverUtils.isMySQLFamily(connection.driver)) return
+                // Mysql 8.0.16+ and MariaDB 10.2.1+ support check constraints.
+                if (DriverUtils.isMySQLFamily(connection.driver)) {
+                    const isMariaDb = connection.driver.options.type === "mariadb"
+                    const supportedVersion = isMariaDb ? "10.2.1" : "8.0.16"
+                    const supportsCheckConstraints = DriverUtils.isReleaseVersionOrGreater(
+                        connection.driver,
+                        supportedVersion,
+                    )
+                    if (!supportsCheckConstraints) return
+                }
 
                 let numericType = "int"
                 if (DriverUtils.isSQLiteFamily(connection.driver)) {
