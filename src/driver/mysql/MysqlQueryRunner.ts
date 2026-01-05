@@ -2028,9 +2028,14 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
         const isMariaDb = this.driver.options.type === "mariadb"
         const supportedVersion = isMariaDb ? "10.2.1" : "8.0.16"
 
-        if (!VersionUtils.isGreaterOrEqual(this.driver.version, supportedVersion)) {
+        if (
+            !VersionUtils.isGreaterOrEqual(
+                this.driver.version,
+                supportedVersion,
+            )
+        ) {
             throw new TypeORMError(
-                `Check constraints are not supported in ${isMariaDb ? "MariaDB" : "MySQL"} versions before ${supportedVersion}.`
+                `Check constraints are not supported in ${isMariaDb ? "MariaDB" : "MySQL"} versions before ${supportedVersion}.`,
             )
         }
 
@@ -2653,7 +2658,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             dbCollations,
             dbIndices,
             dbForeignKeys,
-            dbChecks = [], // Default to empty array if not queried
+            dbChecks = [],
         ] = results
 
         // create tables for loaded tables
@@ -3443,7 +3448,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             ? checkConstraintOrName.name
             : checkConstraintOrName
         // MariaDB uses DROP CONSTRAINT for check constraints
-        // MySQL uses DROP CHECK (for compatibility with MySQL 8.0.16-8.0.18)
+        // MySQL uses DROP CHECK for check constraints
         const isMariaDb = this.driver.options.type === "mariadb"
         const dropKeyword = isMariaDb ? "CONSTRAINT" : "CHECK"
         return new Query(
