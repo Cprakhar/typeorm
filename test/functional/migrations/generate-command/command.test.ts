@@ -5,8 +5,9 @@ import {
 } from "../../../utils/test-utils"
 import { DataSource } from "../../../../src/data-source/DataSource"
 import { Category, Post } from "./entity"
-import { CheckConstraintEntity } from "./entity/check-constraint/check.entity"
-import { CheckConstraintEntityModified } from "./entity/check-constraint/check-modified.entity"
+import { CheckConstraintEntity } from "./entity/check.entity"
+import { CheckConstraintEntityModified } from "./entity/check-modified.entity"
+import { DriverUtils } from "../../../../src/driver/DriverUtils"
 
 describe("migrations > generate command", () => {
     let connections: DataSource[]
@@ -56,7 +57,6 @@ describe("migrations > generate command with check constraints", () => {
                 schemaCreate: false,
                 dropSchema: true,
                 entities: [CheckConstraintEntity],
-                enabledDrivers: ["postgres"],
             })),
     )
     after(() => closeTestingConnections(connections))
@@ -98,9 +98,11 @@ describe("migrations > generate command with check constraint changes", () => {
                     schemaCreate: false,
                     dropSchema: true,
                     entities: [CheckConstraintEntity],
-                    enabledDrivers: ["postgres"],
                 })
             ).map(async (connection) => {
+                // MySQL does not support check constraints
+                if (DriverUtils.isMySQLFamily(connection.driver)) return
+
                 try {
                     // Build schema with original check constraints
                     await connection.driver.createSchemaBuilder().build()
@@ -114,7 +116,6 @@ describe("migrations > generate command with check constraint changes", () => {
                         schemaCreate: false,
                         dropSchema: false, // Keep existing schema
                         entities: [CheckConstraintEntityModified],
-                        enabledDrivers: [connection.options.type],
                     })
 
                     const [modConn] = modifiedConnection

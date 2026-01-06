@@ -1097,11 +1097,8 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                     )
                     if (!tableCheck) return false
 
-                    // Skip if both expressions are empty/undefined (shouldn't happen but defensive)
-                    if (
-                        !checkMetadata.expression &&
-                        !tableCheck.expression
-                    ) {
+                    // If both expressions are missing, consider them identical
+                    if (!checkMetadata.expression && !tableCheck.expression) {
                         return false
                     }
 
@@ -1121,7 +1118,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                         (tc) => tc.name === checkMetadata.name,
                     )
                     if (!oldCheck) {
-                        // This should never happen due to the filter above, but TypeScript doesn't know that
+                        // This should never happen due to the filter above, but TypeScript needs the check
                         throw new TypeORMError(
                             `Check constraint "${checkMetadata.name}" not found in table "${table.name}" during modification`,
                         )
@@ -1167,7 +1164,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
 
         // Remove PostgreSQL type casts (::text, ::character varying, etc.)
         // Must be done before other transformations
-        normalized = normalized.replace(/::[a-z_][a-z0-9_\s\[\]]*/gi, "")
+        normalized = normalized.replace(/::[a-z_][a-z0-9_\s[\]]*/gi, "")
 
         // Normalize PostgreSQL "= ANY (ARRAY[...])" to "IN (...)"
         // Replace "= ANY" with "IN" - parentheses removal will handle the rest

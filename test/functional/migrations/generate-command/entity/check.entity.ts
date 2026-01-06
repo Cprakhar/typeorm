@@ -3,7 +3,7 @@ import {
     Entity,
     Column,
     PrimaryGeneratedColumn,
-} from "../../../../../../src"
+} from "../../../../../src"
 
 @Entity("check_constraint_entity")
 export class CheckConstraintEntity {
@@ -19,6 +19,6 @@ export class CheckConstraintEntity {
     type: "A" | "B" | "C"
 
     @Column({ nullable: true })
-    @Check("score_check", "score >= 0 AND score <= 100")
+    @Check("score_check", "score >= 0")
     score: number
 }
