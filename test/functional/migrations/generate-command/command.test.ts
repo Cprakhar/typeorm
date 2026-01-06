@@ -72,9 +72,7 @@ describe("migrations > generate command with check constraints", () => {
             }),
         ))
 
-    // TODO: This test currently fails due to check constraint comparison bug
-    // After the fix in this PR is applied, this test should pass
-    it.skip("does not generate when no model changes with check constraints", () =>
+    it("does not generate when no model changes with check constraints", () =>
         Promise.all(
             connections.map(async (connection) => {
                 await connection.driver.createSchemaBuilder().build()

@@ -1165,10 +1165,41 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         // Convert to lowercase for case-insensitive comparison
         normalized = normalized.toLowerCase()
 
+        // Remove PostgreSQL type casts (::text, ::character varying, etc.)
+        // Must be done before other transformations
+        normalized = normalized.replace(/::[a-z_][a-z0-9_\s\[\]]*/gi, "")
+
+        // Normalize PostgreSQL "= ANY (ARRAY[...])" to "IN (...)"
+        // Replace "= ANY" with "IN" - parentheses removal will handle the rest
+        normalized = normalized.replace(/=\s*any\s*/gi, " in ")
+
+        // Remove PostgreSQL ARRAY wrapper - just strip "array[" and the brackets
+        normalized = normalized.replace(/array\[/gi, " ")
+        normalized = normalized.replace(/\]/g, " ")
+
+        // Remove all parentheses (including nested ones) to normalize structure
+        // This handles cases like ((age >= 18)) vs (age >= 18) vs age >= 18
+        let iteration = 0
+        while (
+            (normalized.includes("(") || normalized.includes(")")) &&
+            iteration < 20
+        ) {
+            const prev = normalized
+            normalized = normalized.replace(/\(([^()]*)\)/g, " $1 ")
+            if (prev === normalized) break // Prevent infinite loop
+            iteration++
+        }
+
         // Normalize quotes - convert all quote types to single quotes
         normalized = normalized.replace(/"/g, "'")
 
-        // Remove all whitespace completely for comparison to handle various formatting
+        // Remove SQL Server brackets [col] to plain identifiers
+        normalized = normalized.replace(/\[([^\]]+)\]/g, "$1")
+
+        // Remove backticks
+        normalized = normalized.replace(/`/g, "")
+
+        // Remove all whitespace completely for final comparison
         normalized = normalized.replace(/\s+/g, "")
 
         return normalized
