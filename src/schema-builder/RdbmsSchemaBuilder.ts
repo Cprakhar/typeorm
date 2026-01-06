@@ -1072,11 +1072,88 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
      * Recreates modified CHECK constraints.
      */
     protected async recreateModifiedChecks(): Promise<void> {
-        // TODO: Implement, so that changes in check expressions are handled
-        // and correct migration queries are generated.
-        // Before no migration queries are generated for changed checks.
-        // Note: Different DBs have different syntax for storing check expressions,
-        // so check expression comparison must be done properly.
+        // Mysql does not support check constraints
+        if (
+            DriverUtils.isMySQLFamily(this.connection.driver) ||
+            this.connection.driver.options.type === "aurora-mysql"
+        )
+            return
+
+        for (const metadata of this.entityToSyncMetadatas) {
+            const table = this.queryRunner.loadedTables.find(
+                (table) =>
+                    this.getTablePath(table) === this.getTablePath(metadata),
+            )
+            if (!table) continue
+
+            // Find check constraints that exist in both metadata and table but have different expressions
+            const modifiedChecks = metadata.checks
+                .filter((checkMetadata) => {
+                    const tableCheck = table.checks.find(
+                        (tc) => tc.name === checkMetadata.name,
+                    )
+                    if (!tableCheck) return false
+
+                    // Compare expressions - normalize for comparison
+                    const metadataExpression = this.normalizeCheckExpression(
+                        checkMetadata.expression || "",
+                    )
+                    const tableExpression = this.normalizeCheckExpression(
+                        tableCheck.expression || "",
+                    )
+
+                    return metadataExpression !== tableExpression
+                })
+                .map((checkMetadata) => {
+                    const oldCheck = table.checks.find(
+                        (tc) => tc.name === checkMetadata.name,
+                    )!
+                    const newCheck = TableCheck.create(checkMetadata)
+                    return { oldCheck, newCheck }
+                })
+
+            if (modifiedChecks.length === 0) continue
+
+            this.connection.logger.logSchemaBuild(
+                `recreating modified check constraints: ${modifiedChecks
+                    .map((c) => `"${c.newCheck.name}"`)
+                    .join(", ")} in table "${table.name}"`,
+            )
+
+            // Drop old check constraints
+            await this.queryRunner.dropCheckConstraints(
+                table,
+                modifiedChecks.map((c) => c.oldCheck),
+            )
+
+            // Create new check constraints with updated expressions
+            await this.queryRunner.createCheckConstraints(
+                table,
+                modifiedChecks.map((c) => c.newCheck),
+            )
+        }
+    }
+
+    /**
+     * Normalizes check expression for comparison.
+     * Different databases store check expressions with different formatting,
+     * so we need to normalize them before comparing.
+     */
+    protected normalizeCheckExpression(expression: string): string {
+        // Trim whitespace
+        let normalized = expression.trim()
+
+        // Convert to lowercase for case-insensitive comparison
+        normalized = normalized.toLowerCase()
+
+        // Remove all whitespace (spaces, tabs, newlines) for comparison
+        normalized = normalized.replace(/\s+/g, " ")
+
+        // Normalize quotes - convert all quote types to single quotes
+        // Replace double quotes with single quotes (but preserve escaped quotes)
+        normalized = normalized.replace(/"/g, "'")
+
+        return normalized
     }
 
     protected async createNewChecks(): Promise<void> {
