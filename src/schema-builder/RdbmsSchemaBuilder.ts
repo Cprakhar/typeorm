@@ -1146,12 +1146,11 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         // Convert to lowercase for case-insensitive comparison
         normalized = normalized.toLowerCase()
 
-        // Remove all whitespace (spaces, tabs, newlines) for comparison
-        normalized = normalized.replace(/\s+/g, " ")
-
         // Normalize quotes - convert all quote types to single quotes
-        // Replace double quotes with single quotes (but preserve escaped quotes)
         normalized = normalized.replace(/"/g, "'")
+
+        // Remove all whitespace completely for comparison to handle various formatting
+        normalized = normalized.replace(/\s+/g, "")
 
         return normalized
     }
