@@ -1116,9 +1116,16 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                     return metadataExpression !== tableExpression
                 })
                 .map((checkMetadata) => {
+                    // We know oldCheck exists because we filtered for it above
                     const oldCheck = table.checks.find(
                         (tc) => tc.name === checkMetadata.name,
-                    )!
+                    )
+                    if (!oldCheck) {
+                        // This should never happen due to the filter above, but TypeScript doesn't know that
+                        throw new TypeORMError(
+                            `Check constraint "${checkMetadata.name}" not found in table "${table.name}" during modification`,
+                        )
+                    }
                     const newCheck = TableCheck.create(checkMetadata)
                     return { oldCheck, newCheck }
                 })
