@@ -1070,6 +1070,9 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
 
     /**
      * Recreates modified CHECK constraints.
+     * Detects check constraints that have the same name but different expressions
+     * between the entity metadata and the database, then drops and recreates them.
+     * This ensures that schema synchronization properly updates check constraint logic.
      */
     protected async recreateModifiedChecks(): Promise<void> {
         // Mysql does not support check constraints
@@ -1136,8 +1139,9 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
 
     /**
      * Normalizes check expression for comparison.
-     * Different databases store check expressions with different formatting,
-     * so we need to normalize them before comparing.
+     * Different databases store check expressions with different formatting
+     * (e.g., different quote styles, whitespace, case), so we normalize
+     * them to enable reliable comparison of constraint logic.
      */
     protected normalizeCheckExpression(expression: string): string {
         // Trim whitespace
