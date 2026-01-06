@@ -1097,6 +1097,14 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                     )
                     if (!tableCheck) return false
 
+                    // Skip if both expressions are empty/undefined (shouldn't happen but defensive)
+                    if (
+                        !checkMetadata.expression &&
+                        !tableCheck.expression
+                    ) {
+                        return false
+                    }
+
                     // Compare expressions - normalize for comparison
                     const metadataExpression = this.normalizeCheckExpression(
                         checkMetadata.expression || "",
