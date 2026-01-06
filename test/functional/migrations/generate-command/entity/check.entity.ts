@@ -19,6 +19,6 @@ export class CheckConstraintEntity {
     type: "A" | "B" | "C"
 
     @Column({ nullable: true })
-    @Check("score_check", "score >= 0")
+    @Check("score_check", "score >= 0 AND score <= 100")
     score: number
 }
