@@ -228,6 +228,57 @@ export class SelectQueryBuilder<Entity extends ObjectLiteral>
     }
 
     /**
+     * Creates UNION expression for the query.
+     * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in UNION expression.
+     * @param distinct - Indicates whether to use UNION DISTINCT or not.
+     * @returns Returns itself.
+     */
+    union(
+        queryBuilderOrFactory:
+            | SelectQueryBuilder<any>
+            | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
+        distinct?: boolean,
+    ): this {
+        // TODO: Implement union
+
+        return this
+    }
+
+    /**
+     * Creates INTERSECT expression for the query.
+     * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in INTERSECT expression.
+     * @param distinct - Indicates whether to use INTERSECT DISTINCT or not.
+     * @returns Returns itself.
+     */
+    intersect(
+        queryBuilderOrFactory:
+            | SelectQueryBuilder<any>
+            | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
+        distinct?: boolean,
+    ): this {
+        // TODO: Implement intersect
+
+        return this
+    }
+
+    /**
+     * Creates EXCEPT expression for the query.
+     * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in EXCEPT expression.
+     * @param distinct - Indicates whether to use EXCEPT DISTINCT or not.
+     * @returns Returns itself.
+     */
+    except(
+        queryBuilderOrFactory:
+            | SelectQueryBuilder<any>
+            | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
+        distinct?: boolean,
+    ): this {
+        // TODO: Implement except
+
+        return this
+    }
+
+    /**
      * Set max execution time.
      * @param milliseconds
      */
