@@ -89,12 +89,48 @@ export class SelectQueryBuilder<Entity extends ObjectLiteral>
         sql += this.createWhereExpression()
         sql += this.createGroupByExpression()
         sql += this.createHavingExpression()
+        sql += this.createSetOperationsExpression()
         sql += this.createOrderByExpression()
         sql += this.createLimitOffsetExpression()
         sql += this.createLockExpression()
         sql = sql.trim()
         if (this.expressionMap.subQuery) sql = "(" + sql + ")"
         return this.replacePropertyNamesForTheWholeQuery(sql)
+    }
+
+    /**
+     * Gets generated SQL query with parameters being replaced.
+     * Overrides parent method to handle set operations parameter merging.
+     */
+    override getQueryAndParameters(): [string, any[]] {
+        // If no set operations, use the default implementation
+        if (
+            !this.expressionMap.setOperations ||
+            this.expressionMap.setOperations.length === 0
+        ) {
+            return super.getQueryAndParameters()
+        }
+
+        // Get the main query SQL and parameters
+        const query = this.getQuery()
+        const mainParameters = this.getParameters()
+
+        // Merge parameters from set operation queries
+        let allParameters = { ...mainParameters }
+
+        for (const setOp of this.expressionMap.setOperations) {
+            const setOpQuery = setOp.query as SelectQueryBuilder<any>
+            const setOpParameters = setOpQuery.getParameters()
+
+            // Merge parameters, being careful about name collisions
+            allParameters = { ...allParameters, ...setOpParameters }
+        }
+
+        return this.connection.driver.escapeQueryWithParameters(
+            query,
+            allParameters,
+            this.expressionMap.nativeParameters,
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -230,50 +266,121 @@ export class SelectQueryBuilder<Entity extends ObjectLiteral>
     /**
      * Creates UNION expression for the query.
      * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in UNION expression.
-     * @param distinct - Indicates whether to use UNION DISTINCT or not.
+     * @param distinct - Indicates whether to use UNION DISTINCT or not. Default is true (UNION DISTINCT).
      * @returns Returns itself.
      */
     union(
         queryBuilderOrFactory:
             | SelectQueryBuilder<any>
             | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
-        distinct?: boolean,
+        distinct: boolean = true,
     ): this {
-        // TODO: Implement union
+        const type = distinct ? "UNION" : "UNION ALL"
+        return this.addSetOperation(queryBuilderOrFactory, type)
+    }
 
-        return this
+    /**
+     * Creates UNION ALL expression for the query.
+     * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in UNION ALL expression.
+     * @returns Returns itself.
+     */
+    unionAll(
+        queryBuilderOrFactory:
+            | SelectQueryBuilder<any>
+            | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
+    ): this {
+        return this.addSetOperation(queryBuilderOrFactory, "UNION ALL")
     }
 
     /**
      * Creates INTERSECT expression for the query.
      * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in INTERSECT expression.
-     * @param distinct - Indicates whether to use INTERSECT DISTINCT or not.
+     * @param distinct - Indicates whether to use INTERSECT DISTINCT or not. Default is true (INTERSECT).
      * @returns Returns itself.
      */
     intersect(
         queryBuilderOrFactory:
             | SelectQueryBuilder<any>
             | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
-        distinct?: boolean,
+        distinct: boolean = true,
     ): this {
-        // TODO: Implement intersect
+        const type = distinct ? "INTERSECT" : "INTERSECT ALL"
+        return this.addSetOperation(queryBuilderOrFactory, type)
+    }
 
-        return this
+    /**
+     * Creates INTERSECT ALL expression for the query.
+     * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in INTERSECT ALL expression.
+     * @returns Returns itself.
+     */
+    intersectAll(
+        queryBuilderOrFactory:
+            | SelectQueryBuilder<any>
+            | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
+    ): this {
+        return this.addSetOperation(queryBuilderOrFactory, "INTERSECT ALL")
     }
 
     /**
      * Creates EXCEPT expression for the query.
      * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in EXCEPT expression.
-     * @param distinct - Indicates whether to use EXCEPT DISTINCT or not.
+     * @param distinct - Indicates whether to use EXCEPT DISTINCT or not. Default is true (EXCEPT).
      * @returns Returns itself.
      */
     except(
         queryBuilderOrFactory:
             | SelectQueryBuilder<any>
             | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
-        distinct?: boolean,
+        distinct: boolean = true,
     ): this {
-        // TODO: Implement except
+        const type = distinct ? "EXCEPT" : "EXCEPT ALL"
+        return this.addSetOperation(queryBuilderOrFactory, type)
+    }
+
+    /**
+     * Creates EXCEPT ALL expression for the query.
+     * @param queryBuilderOrFactory - Query builder or a function that returns a query builder to be used in EXCEPT ALL expression.
+     * @returns Returns itself.
+     */
+    exceptAll(
+        queryBuilderOrFactory:
+            | SelectQueryBuilder<any>
+            | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
+    ): this {
+        return this.addSetOperation(queryBuilderOrFactory, "EXCEPT ALL")
+    }
+
+    /**
+     * Adds a set operation (UNION, INTERSECT, EXCEPT) to the query.
+     * @param queryBuilderOrFactory - Query builder or a function that returns a query builder.
+     * @param type - Type of set operation.
+     * @returns Returns itself.
+     */
+    private addSetOperation(
+        queryBuilderOrFactory:
+            | SelectQueryBuilder<any>
+            | ((qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>),
+        type:
+            | "UNION"
+            | "UNION ALL"
+            | "INTERSECT"
+            | "INTERSECT ALL"
+            | "INTERSECT DISTINCT"
+            | "EXCEPT"
+            | "EXCEPT ALL"
+            | "EXCEPT DISTINCT",
+    ): this {
+        const query =
+            typeof queryBuilderOrFactory === "function"
+                ? queryBuilderOrFactory(
+                      this.createQueryBuilder() as SelectQueryBuilder<any>,
+                  )
+                : queryBuilderOrFactory
+
+        this.expressionMap.setOperations.push({
+            type,
+            query,
+        })
 
         return this
     }
@@ -2901,6 +3008,43 @@ export class SelectQueryBuilder<Entity extends ObjectLiteral>
 
         if (!conditions.length) return ""
         return " HAVING " + conditions
+    }
+
+    /**
+     * Creates "SET OPERATIONS" (UNION, INTERSECT, EXCEPT) part of SQL query.
+     */
+    protected createSetOperationsExpression(): string {
+        if (
+            !this.expressionMap.setOperations ||
+            this.expressionMap.setOperations.length === 0
+        ) {
+            return ""
+        }
+
+        let sql = ""
+
+        for (const setOp of this.expressionMap.setOperations) {
+            // Get the set operation query SQL
+            const setOpQuery = setOp.query as SelectQueryBuilder<any>
+            let setOpSql = setOpQuery.getQuery()
+
+            // Handle database-specific syntax (e.g., Oracle uses MINUS instead of EXCEPT)
+            let operationType = setOp.type
+            if (
+                this.connection.driver.options.type === "oracle" &&
+                (setOp.type === "EXCEPT" ||
+                    setOp.type === "EXCEPT ALL" ||
+                    setOp.type === "EXCEPT DISTINCT")
+            ) {
+                // Oracle uses MINUS instead of EXCEPT
+                operationType = setOp.type.replace("EXCEPT", "MINUS") as any
+            }
+
+            // Append the set operation
+            sql += ` ${operationType} ${setOpSql}`
+        }
+
+        return sql
     }
 
     protected buildEscapedEntityColumnSelects(

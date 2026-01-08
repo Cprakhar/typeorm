@@ -352,6 +352,22 @@ export class QueryExpressionMap {
         options: QueryBuilderCteOptions
     }[] = []
 
+    /**
+     * Set operations (UNION, INTERSECT, EXCEPT) to be applied to the query.
+     */
+    setOperations: {
+        type:
+            | "UNION"
+            | "UNION ALL"
+            | "INTERSECT"
+            | "INTERSECT ALL"
+            | "INTERSECT DISTINCT"
+            | "EXCEPT"
+            | "EXCEPT ALL"
+            | "EXCEPT DISTINCT"
+        query: QueryBuilder<any>
+    }[] = []
+
     // -------------------------------------------------------------------------
     // Constructor
     // -------------------------------------------------------------------------
