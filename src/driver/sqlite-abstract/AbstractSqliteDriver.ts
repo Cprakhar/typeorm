@@ -141,6 +141,7 @@ export abstract class AbstractSqliteDriver implements Driver {
         "nchar",
         "native character",
         "nvarchar",
+        "nvarchar2",
         "text",
         "clob",
         "text",
@@ -158,6 +159,7 @@ export abstract class AbstractSqliteDriver implements Driver {
         "datetime",
         "json",
         "jsonb",
+        "any",
     ]
 
     /**
@@ -175,6 +177,7 @@ export abstract class AbstractSqliteDriver implements Driver {
         "nchar",
         "native character",
         "nvarchar",
+        "nvarchar2",
         "text",
         "blob",
         "clob",
@@ -386,6 +389,8 @@ export abstract class AbstractSqliteDriver implements Driver {
             return DateUtils.simpleArrayToString(value)
         } else if (columnMetadata.type === "simple-enum") {
             return DateUtils.simpleEnumToString(value)
+        } else if (columnMetadata.type === "any") {
+            return DateUtils.simpleJsonToString(value)
         }
 
         return value
@@ -453,7 +458,8 @@ export abstract class AbstractSqliteDriver implements Driver {
         } else if (
             columnMetadata.type === "json" ||
             columnMetadata.type === "jsonb" ||
-            columnMetadata.type === "simple-json"
+            columnMetadata.type === "simple-json" ||
+            columnMetadata.type === "any"
         ) {
             value = DateUtils.stringToSimpleJson(value)
         } else if (columnMetadata.type === "simple-array") {
@@ -1021,6 +1027,55 @@ export abstract class AbstractSqliteDriver implements Driver {
             return jsonb ? `jsonb(${value})` : `json(${value})`
         }
         return value
+    }
+
+    /**
+     * Converts column type to strict-compatible type for SQLite strict mode.
+     * SQLite strict mode only allows: INT, INTEGER, REAL, TEXT, BLOB, ANY
+     *
+     * @param columnType
+     */
+    convertToStrictType(columnType: string): string {
+        const type = columnType.toLowerCase().trim()
+
+        switch (type) {
+            case "int":
+            case "integer":
+            case "tinyint":
+            case "smallint":
+            case "mediumint":
+            case "bigint":
+            case "unsigned big int":
+            case "int2":
+            case "int8":
+            case "boolean":
+                return "integer"
+            case "text":
+            case "character":
+            case "varchar":
+            case "varying character":
+            case "nchar":
+            case "native character":
+            case "nvarchar":
+            case "nvarchar2":
+            case "clob":
+            case "datetime":
+            case "date":
+            case "time":
+            case "json":
+                return "text"
+            case "real":
+            case "double":
+            case "double precision":
+            case "float":
+            case "numeric":
+            case "decimal":
+                return "real"
+            case "blob":
+                return "blob"
+            default:
+                return "any"
+        }
     }
 
     // -------------------------------------------------------------------------
