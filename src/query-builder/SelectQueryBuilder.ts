@@ -4350,7 +4350,7 @@ export class SelectQueryBuilder<Entity extends ObjectLiteral>
                 }
 
                 if (column) {
-                    let aliasPath = `${alias}.${propertyPath}`
+                    let aliasPath = `${this.escape(alias)}.${this.escape(propertyPath)}`
                     if (column.isVirtualProperty && column.query) {
                         aliasPath = `(${column.query(this.escape(alias))})`
                     }

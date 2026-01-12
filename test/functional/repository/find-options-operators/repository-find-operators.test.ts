@@ -23,13 +23,14 @@ import { Post } from "./entity/Post"
 import { Raw } from "../../../../src/find-options/operator/Raw"
 import { PersonAR } from "./entity/PersonAR"
 import { expect } from "chai"
+import { Comment } from "./entity/Comment"
 
 describe("repository > find options > operators", () => {
     let connections: DataSource[]
     before(
         async () =>
             (connections = await createTestingConnections({
-                entities: [__dirname + "/entity/*{.js,.ts}"],
+                entities: [Post, PersonAR],
             })),
     )
     beforeEach(() => reloadTestingDatabases(connections))
@@ -893,4 +894,60 @@ describe("repository > find options > operators", () => {
                 ])
             }),
         ))
+
+    describe("raw with jsonb columns", () => {
+        let connections: DataSource[]
+        before(
+            async () =>
+                (connections = await createTestingConnections({
+                    entities: [Comment],
+                    enabledDrivers: ["postgres", "cockroachdb"],
+                })),
+        )
+        beforeEach(() => reloadTestingDatabases(connections))
+        after(() => closeTestingConnections(connections))
+
+        it("should return comments with specific metadata key-value pair", () =>
+            Promise.all(
+                connections.map(async (connection) => {
+                    // insert some fake data
+                    const comment1 = new Comment()
+                    comment1.text = "Comment #1"
+                    comment1.metadata = {
+                        approved: true,
+                        tags: ["news", "tech"],
+                    }
+                    await connection.manager.save(comment1)
+                    const comment2 = new Comment()
+                    comment2.text = "Comment #2"
+                    comment2.metadata = { approved: false, tags: ["news"] }
+                    await connection.manager.save(comment2)
+
+                    // check operator
+                    const loadedComments = await connection
+                        .getRepository(Comment)
+                        .findBy({
+                            metadata: Raw((alias) => {
+                                if (
+                                    connection.driver.options.type === "mssql"
+                                ) {
+                                    return `${alias}.approved = 1`
+                                } else {
+                                    return `${alias} ->> 'approved' = 'true'`
+                                }
+                            }),
+                        })
+                    loadedComments.should.be.eql([
+                        {
+                            id: 1,
+                            text: "Comment #1",
+                            metadata: {
+                                approved: true,
+                                tags: ["news", "tech"],
+                            },
+                        },
+                    ])
+                }),
+            ))
+    })
 })
