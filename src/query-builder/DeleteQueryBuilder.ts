@@ -8,6 +8,8 @@ import { Brackets } from "./Brackets"
 import { DeleteResult } from "./result/DeleteResult"
 import { ReturningStatementNotSupportedError } from "../error/ReturningStatementNotSupportedError"
 import { InstanceChecker } from "../util/InstanceChecker"
+import { JoinAttribute } from "./JoinAttribute"
+import { DriverUtils } from "../driver/DriverUtils"
 
 /**
  * Allows to build complex sql queries in a fashion way and execute those queries.
@@ -126,6 +128,32 @@ export class DeleteQueryBuilder<Entity extends ObjectLiteral>
         const mainAlias = this.createFromAlias(entityTarget, aliasName)
         this.expressionMap.setMainAlias(mainAlias)
         return this as any as DeleteQueryBuilder<T>
+    }
+
+    /**
+     * Specifies LEFT JOIN operation in the query.
+     */
+    leftJoin(
+        entityOrProperty: Function | string,
+        alias: string,
+        condition?: string,
+        parameters?: ObjectLiteral,
+    ): this {
+        this.join("LEFT", entityOrProperty, alias, condition, parameters)
+        return this
+    }
+
+    /**
+     * Specifies INNER JOIN operation in the query.
+     */
+    innerJoin(
+        entityOrProperty: Function | string,
+        alias: string,
+        condition?: string,
+        parameters?: ObjectLiteral,
+    ): this {
+        this.join("INNER", entityOrProperty, alias, condition, parameters)
+        return this
     }
 
     /**
@@ -280,18 +308,104 @@ export class DeleteQueryBuilder<Entity extends ObjectLiteral>
      */
     protected createDeleteExpression() {
         const tableName = this.getTableName(this.getMainTableName())
+        const tableAlias = this.expressionMap.mainAlias!.name
+        const joinExpression = this.createJoinExpression()
         const whereExpression = this.createWhereExpression()
         const returningExpression = this.createReturningExpression("delete")
 
-        if (returningExpression === "") {
-            return `DELETE FROM ${tableName}${whereExpression}`
-        }
-        if (this.connection.driver.options.type === "mssql") {
-            return `DELETE FROM ${tableName} OUTPUT ${returningExpression}${whereExpression}`
-        }
-        if (this.connection.driver.options.type === "spanner") {
-            return `DELETE FROM ${tableName}${whereExpression} THEN RETURN ${returningExpression}`
+        if (joinExpression) {
+            if (DriverUtils.isMySQLFamily(this.connection.driver)) {
+                return `DELETE ${this.escape(
+                    tableAlias,
+                )} FROM ${tableName} ${this.escape(
+                    tableAlias,
+                )}${joinExpression}${whereExpression}${
+                    returningExpression ? " " + returningExpression : ""
+                }`
+            }
+        } else {
+            if (returningExpression === "") {
+                return `DELETE FROM ${tableName}${whereExpression}`
+            }
+            if (this.connection.driver.options.type === "mssql") {
+                return `DELETE FROM ${tableName} OUTPUT ${returningExpression}${whereExpression}`
+            }
+            if (this.connection.driver.options.type === "spanner") {
+                return `DELETE FROM ${tableName}${whereExpression} THEN RETURN ${returningExpression}`
+            }
         }
         return `DELETE FROM ${tableName}${whereExpression} RETURNING ${returningExpression}`
+    }
+
+    /**
+     * Creates "JOIN" part of SQL query for DELETE.
+     */
+    protected createJoinExpression(): string {
+        const joins = this.expressionMap.joinAttributes.map((joinAttr) => {
+            const destinationTableName = joinAttr.tablePath
+            const destinationTableAlias = joinAttr.alias.name
+
+            // For DELETE queries, we only support direct table joins without relation metadata
+            const destinationJoin = joinAttr.alias.subQuery
+                ? joinAttr.alias.subQuery
+                : this.getTableName(destinationTableName!)
+
+            return (
+                " " +
+                joinAttr.direction +
+                " JOIN " +
+                destinationJoin +
+                " " +
+                this.escape(destinationTableAlias) +
+                (joinAttr.condition ? " ON " + joinAttr.condition : "")
+            )
+        })
+
+        return joins.join("")
+    }
+
+    /**
+     * Performs join operation for DELETE query.
+     */
+    protected join(
+        direction: "INNER" | "LEFT",
+        entityOrProperty: Function | string,
+        aliasName: string,
+        condition?: string,
+        parameters?: ObjectLiteral,
+    ): void {
+        if (parameters) {
+            this.setParameters(parameters)
+        }
+
+        const joinAttribute = new JoinAttribute(
+            this.connection,
+            this.expressionMap,
+        )
+        joinAttribute.direction = direction
+        joinAttribute.entityOrProperty = entityOrProperty
+        joinAttribute.condition = condition
+        this.expressionMap.joinAttributes.push(joinAttribute)
+        // Create alias for the joined table
+        if (typeof entityOrProperty === "function") {
+            // If it's a function, treat it as entity target
+            const metadata = this.connection.getMetadata(entityOrProperty)
+            joinAttribute.alias = this.expressionMap.createAlias({
+                type: "join",
+                name: aliasName,
+                metadata: metadata,
+            })
+        } else {
+            // If it's a string, treat it as table name or subquery
+            const isSubQuery =
+                entityOrProperty.slice(0, 1) === "(" &&
+                entityOrProperty.slice(-1) === ")"
+            joinAttribute.alias = this.expressionMap.createAlias({
+                type: "join",
+                name: aliasName,
+                tablePath: isSubQuery ? undefined : entityOrProperty,
+                subQuery: isSubQuery ? entityOrProperty : undefined,
+            })
+        }
     }
 }
