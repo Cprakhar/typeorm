@@ -1160,8 +1160,13 @@ export abstract class AbstractSqliteQueryRunner
      */
     async clearTable(
         tableName: string,
-        options?: { cascade?: boolean },
+        options?: { cascade: boolean },
     ): Promise<void> {
+        if (options?.cascade) {
+            throw new TypeORMError(
+                `SQLite does not support clearing table with cascade option`,
+            )
+        }
         await this.query(`DELETE FROM ${this.escapePath(tableName)}`)
     }
 
