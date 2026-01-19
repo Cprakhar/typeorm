@@ -1302,45 +1302,32 @@ export class MongoEntityManager extends EntityManager {
     /**
      * Overrides cursor's toArray and next methods to convert results to entity automatically.
      *
-     * @param metadata
      * @param cursor
+     * @param metadata
      */
     protected applyEntityTransformationToCursor<Entity extends ObjectLiteral>(
         metadata: EntityMetadata,
         cursor: FindCursor<Entity> | AggregationCursor<Entity>,
     ) {
-        const queryRunner = this.mongoQueryRunner
+        const transformer = new DocumentToEntityTransformer()
+        const originalToArray = cursor.toArray.bind(cursor)
+        const originalNext = cursor.next.bind(cursor)
 
-        ;(cursor as any)["__to_array_func"] = cursor.toArray
         cursor.toArray = () =>
-            ((cursor as any)["__to_array_func"] as CallableFunction)().then(
-                async (results: Entity[]) => {
-                    const transformer = new DocumentToEntityTransformer()
-                    const entities = transformer.transformAll(results, metadata)
-                    // broadcast "load" events
-                    await queryRunner.broadcaster.broadcast(
-                        "Load",
-                        metadata,
-                        entities,
-                    )
-                    return entities
-                },
+            this.toArray(
+                cursor,
+                originalToArray,
+                originalNext,
+                transformer,
+                metadata,
+                this.mongoQueryRunner,
             )
-        ;(cursor as any)["__next_func"] = cursor.next
         cursor.next = () =>
-            ((cursor as any)["__next_func"] as CallableFunction)().then(
-                async (result: Entity) => {
-                    if (!result) {
-                        return result
-                    }
-                    const transformer = new DocumentToEntityTransformer()
-                    const entity = transformer.transform(result, metadata)
-                    // broadcast "load" events
-                    await queryRunner.broadcaster.broadcast("Load", metadata, [
-                        entity,
-                    ])
-                    return entity
-                },
+            this.next(
+                originalNext,
+                transformer,
+                metadata,
+                this.mongoQueryRunner,
             )
     }
 
@@ -1510,5 +1497,53 @@ export class MongoEntityManager extends EntityManager {
             this.count(entityClassOrName, query),
         ])
         return [results, parseInt(count)]
+    }
+
+    private async toArray<Entity>(
+        cursor: FindCursor<Entity> | AggregationCursor<Entity>,
+        originalToArray: () => Promise<Entity[]>,
+        originalNext: () => Promise<Entity | null>,
+        transformer: DocumentToEntityTransformer,
+        metadata: EntityMetadata,
+        queryrunner: MongoQueryRunner,
+    ): Promise<Entity[]> {
+        const patchedNext = cursor.next.bind(cursor)
+        cursor.next = originalNext
+
+        let documents: Entity[]
+        try {
+            documents = await originalToArray()
+        } finally {
+            cursor.next = patchedNext
+        }
+
+        const entities = transformer
+            .transformAll(documents as ObjectLiteral[], metadata)
+            .filter((entity) => entity !== null)
+
+        if (entities.length > 0)
+            await queryrunner.broadcaster.broadcast("Load", metadata, entities)
+
+        return entities
+    }
+
+    private async next<Entity>(
+        originalNext: () => Promise<Entity | null>,
+        transformer: DocumentToEntityTransformer,
+        metadata: EntityMetadata,
+        queryrunner: MongoQueryRunner,
+    ): Promise<Entity | null> {
+        const document = await originalNext()
+        if (document === null) return null
+
+        const entity = transformer.transform(
+            document as ObjectLiteral,
+            metadata,
+        )
+        if (entity === null) return null
+
+        await queryrunner.broadcaster.broadcast("Load", metadata, [entity])
+
+        return entity
     }
 }

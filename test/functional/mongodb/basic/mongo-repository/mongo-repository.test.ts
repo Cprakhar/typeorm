@@ -297,6 +297,71 @@ describe("mongodb > MongoRepository", () => {
                 expect(loadedPosts[1].title).to.eql("Post #1")
             }),
         ))
+
+    it("should return correct count of documents with next and toArray", () =>
+        Promise.all(
+            dataSources.map(async (dataSource) => {
+                const postRepository = dataSource.getMongoRepository(Post)
+
+                // save few posts
+                for (let i = 1; i <= 10; i++) {
+                    const post = new Post()
+                    post.title = `Post #${i}`
+                    post.text = `Everything about post #${i}`
+                    await postRepository.save(post)
+                }
+
+                const cursor = postRepository.createEntityCursor()
+                const loadedPosts = []
+                loadedPosts.push(
+                    await cursor.next(),
+                    ...(await cursor.toArray()),
+                )
+                expect(loadedPosts).to.have.length(10)
+            }),
+        ))
+
+    it("should return correct count of documents with toArray only", () =>
+        Promise.all(
+            dataSources.map(async (dataSource) => {
+                const postRepository = dataSource.getMongoRepository(Post)
+
+                // save few posts
+                for (let i = 1; i <= 10; i++) {
+                    const post = new Post()
+                    post.title = `Post #${i}`
+                    post.text = `Everything about post #${i}`
+                    await postRepository.save(post)
+                }
+
+                const cursor = postRepository.createEntityCursor()
+                const loadedPosts = await cursor.toArray()
+                expect(loadedPosts).to.have.length(10)
+            }),
+        ))
+
+    it("should transform documents when using for await on cursor", () =>
+        Promise.all(
+            dataSources.map(async (dataSource) => {
+                const postRepository = dataSource.getMongoRepository(Post)
+
+                // save few posts
+                for (let i = 1; i <= 10; i++) {
+                    const post = new Post()
+                    post.title = `Post #${i}`
+                    post.text = `Everything about post #${i}`
+                    await postRepository.save(post)
+                }
+
+                const cursor = postRepository.createEntityCursor()
+                const loadedPosts = []
+                for await (const post of cursor) {
+                    loadedPosts.push(post)
+                }
+                expect(loadedPosts).to.have.length(10)
+                expect(loadedPosts[0]).to.be.instanceOf(Post)
+            }),
+        ))
 })
 
 async function seedPosts(postRepository: MongoRepository<PostWithDeleted>) {

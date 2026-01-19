@@ -21,7 +21,7 @@ export class DocumentToEntityTransformer {
         return documents.map((document) => this.transform(document, metadata))
     }
 
-    transform(document: any, metadata: EntityMetadata) {
+    transform(document: ObjectLiteral, metadata: EntityMetadata) {
         const entity: any = metadata.create(undefined, {
             fromDeserializer: true,
         })
