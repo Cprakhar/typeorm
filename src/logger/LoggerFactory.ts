@@ -26,6 +26,16 @@ export class LoggerFactory {
             | Logger,
         options?: LoggerOptions,
     ): Logger {
+        if (
+            ObjectUtils.isObject(logger) &&
+            "options" in logger &&
+            options !== undefined &&
+            logger.options === undefined
+        ) {
+            logger.options = options
+            return logger
+        }
+
         if (ObjectUtils.isObject(logger)) return logger as Logger
 
         if (logger) {
