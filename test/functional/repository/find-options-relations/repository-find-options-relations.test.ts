@@ -12,6 +12,9 @@ import { Post } from "./entity/Post"
 import { Photo } from "./entity/Photo"
 import { Counters } from "./entity/Counters"
 import { EntityPropertyNotFoundError } from "../../../../src/error/EntityPropertyNotFoundError"
+import Page from "./entity/Page"
+import PageLocaleData from "./entity/PageLocaleData"
+import PageData from "./entity/PageData"
 
 describe("repository > find options > relations", () => {
     // -------------------------------------------------------------------------
@@ -88,6 +91,23 @@ describe("repository > find options > relations", () => {
                 post.categories = [category1, category2]
                 post.photos = [photo1, photo2, photo3]
                 await connection.manager.save(post)
+
+                const page = new Page()
+                page.ownerId = "owner-id"
+                page.type = "page-type"
+                await connection.manager.save(page)
+
+                const pageLocaleData = new PageLocaleData()
+                pageLocaleData.locale = "en"
+                pageLocaleData.page = page
+                await connection.manager.save(pageLocaleData)
+
+                const pageData = new PageData()
+                pageData.title = "Page Title"
+                pageData.version = 1
+                pageData.updatedAt = new Date()
+                pageData.pageLocaleData = pageLocaleData
+                await connection.manager.save(pageData)
             }),
         ),
     )
@@ -551,6 +571,53 @@ describe("repository > find options > relations", () => {
                     .should.eventually.be.rejectedWith(
                         EntityPropertyNotFoundError,
                     )
+            }),
+        ))
+    it("should load entities with find options {skip, take, order, relations} - #7502", () =>
+        Promise.all(
+            connections.map(async (connection) => {
+                const loadedPages = await connection.getRepository(Page).find({
+                    relations: {
+                        localeData: {
+                            data: true,
+                        },
+                    },
+                    order: {
+                        localeData: {
+                            data: {
+                                updatedAt: "DESC",
+                            },
+                        },
+                    },
+                    skip: 0,
+                    take: 1,
+                })
+
+                loadedPages.length.should.be.equal(1)
+                loadedPages.should.eql([
+                    {
+                        id: loadedPages[0].id,
+                        ownerId: "owner-id",
+                        type: "page-type",
+                        localeData: [
+                            {
+                                id: loadedPages[0].localeData[0].id,
+                                locale: "en",
+                                data: [
+                                    {
+                                        id: loadedPages[0].localeData[0].data[0]
+                                            .id,
+                                        title: "Page Title",
+                                        version: 1,
+                                        updatedAt:
+                                            loadedPages[0].localeData[0].data[0]
+                                                .updatedAt,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ])
             }),
         ))
 })
