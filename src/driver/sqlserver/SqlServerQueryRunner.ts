@@ -3700,6 +3700,7 @@ export class SqlServerQueryRunner
                         const metadataRow = dbCheckMetadata.find(
                             (m) =>
                                 m["name"] === constraint["CONSTRAINT_NAME"] &&
+                                m["table"] === dbTable["TABLE_NAME"] &&
                                 m["schema"] === dbTable["TABLE_SCHEMA"] &&
                                 m["database"] === dbTable["TABLE_CATALOG"],
                         )

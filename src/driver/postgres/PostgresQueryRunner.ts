@@ -4278,6 +4278,7 @@ export class PostgresQueryRunner
                     const metadataRow = dbCheckMetadata.find(
                         (m) =>
                             m["name"] === constraint["constraint_name"] &&
+                            m["table"] === dbTable["table_name"] &&
                             m["schema"] === dbTable["table_schema"],
                     )
                     return new TableCheck({

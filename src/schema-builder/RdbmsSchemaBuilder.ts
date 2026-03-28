@@ -347,7 +347,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             const renamedMetadataColumns = metadata.columns
                 .filter((c) => !c.isVirtualProperty)
                 .filter((column) => {
-                    return !table.columns.find((tableColumn) => {
+                    return !table.columns.some((tableColumn) => {
                         return (
                             tableColumn.name === column.databaseName &&
                             tableColumn.type ===
@@ -366,7 +366,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                 continue
 
             const renamedTableColumns = table.columns.filter((tableColumn) => {
-                return !metadata.columns.find((column) => {
+                return !metadata.columns.some((column) => {
                     return (
                         !column.isVirtualProperty &&
                         column.databaseName === tableColumn.name &&
@@ -438,9 +438,8 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             if (indexMetadata.columns.length !== tableIndex.columnNames.length)
                 return true
 
-            return !indexMetadata.columns.every(
-                (column) =>
-                    tableIndex.columnNames.indexOf(column.databaseName) !== -1,
+            return !indexMetadata.columns.every((column) =>
+                tableIndex.columnNames.includes(column.databaseName),
             )
         }
 
@@ -520,7 +519,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             if (!table) continue
 
             const oldChecks = table.checks.filter((tableCheck) => {
-                return !metadata.checks.find(
+                return !metadata.checks.some(
                     (checkMetadata) => checkMetadata.name === tableCheck.name,
                 )
             })
@@ -547,7 +546,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             const compositeUniques = table.uniques.filter((tableUnique) => {
                 return (
                     tableUnique.columnNames.length > 1 &&
-                    !metadata.uniques.find(
+                    !metadata.uniques.some(
                         (uniqueMetadata) =>
                             uniqueMetadata.name === tableUnique.name,
                     )
@@ -580,7 +579,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             if (!table) continue
 
             const oldExclusions = table.exclusions.filter((tableExclusion) => {
-                return !metadata.exclusions.find(
+                return !metadata.exclusions.some(
                     (exclusionMetadata) =>
                         exclusionMetadata.name === tableExclusion.name,
                 )
@@ -792,7 +791,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
 
             // find columns that exist in the database but does not exist in the metadata
             const droppedTableColumns = table.columns.filter((tableColumn) => {
-                return !metadata.columns.find(
+                return !metadata.columns.some(
                     (columnMetadata) =>
                         !columnMetadata.isVirtualProperty &&
                         columnMetadata.databaseName === tableColumn.name,
@@ -827,7 +826,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                 (columnMetadata) => {
                     return (
                         !columnMetadata.isVirtualProperty &&
-                        !table.columns.find(
+                        !table.columns.some(
                             (tableColumn) =>
                                 tableColumn.name ===
                                 columnMetadata.databaseName,
@@ -994,7 +993,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             const newIndices = metadata.indices
                 .filter(
                     (indexMetadata) =>
-                        !table.indices.find(
+                        !table.indices.some(
                             (tableIndex) =>
                                 tableIndex.name === indexMetadata.name,
                         ) && indexMetadata.synchronize === true,
@@ -1004,7 +1003,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             if (newIndices.length === 0) continue
 
             if (
-                newIndices.find(
+                newIndices.some(
                     (idx) =>
                         !!idx.type &&
                         !this.dataSource.driver.supportedIndexTypes,
@@ -1059,7 +1058,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             const newIndices = metadata.indices
                 .filter(
                     (indexMetadata) =>
-                        !view.indices.find(
+                        !view.indices.some(
                             (tableIndex) =>
                                 tableIndex.name === indexMetadata.name,
                         ) && indexMetadata.synchronize === true,
@@ -1069,7 +1068,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             if (newIndices.length === 0) continue
 
             if (
-                newIndices.find(
+                newIndices.some(
                     (idx) =>
                         !!idx.type &&
                         !this.dataSource.driver.supportedIndexTypes,
@@ -1159,7 +1158,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             const newChecks = metadata.checks
                 .filter(
                     (checkMetadata) =>
-                        !table.checks.find(
+                        !table.checks.some(
                             (tableCheck) =>
                                 tableCheck.name === checkMetadata.name,
                         ),
@@ -1192,7 +1191,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                 .filter(
                     (uniqueMetadata) =>
                         uniqueMetadata.columns.length > 1 &&
-                        !table.uniques.find(
+                        !table.uniques.some(
                             (tableUnique) =>
                                 tableUnique.name === uniqueMetadata.name,
                         ),
@@ -1230,7 +1229,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             const newExclusions = metadata.exclusions
                 .filter(
                     (exclusionMetadata) =>
-                        !table.exclusions.find(
+                        !table.exclusions.some(
                             (tableExclusion) =>
                                 tableExclusion.name === exclusionMetadata.name,
                         ),
@@ -1265,7 +1264,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             if (!table) continue
 
             const newKeys = metadata.foreignKeys.filter((foreignKey) => {
-                return !table.foreignKeys.find(
+                return !table.foreignKeys.some(
                     (dbForeignKey) =>
                         dbForeignKey.name === foreignKey.name &&
                         this.getTablePath(dbForeignKey) ===
@@ -1307,8 +1306,8 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         if (!table) return
 
         const tablesWithFK: Table[] = []
-        const columnForeignKey = table.foreignKeys.find(
-            (foreignKey) => foreignKey.columnNames.indexOf(columnName) !== -1,
+        const columnForeignKey = table.foreignKeys.find((foreignKey) =>
+            foreignKey.columnNames.includes(columnName),
         )
         if (columnForeignKey) {
             const clonedTable = table.clone()
@@ -1322,8 +1321,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
                 (foreignKey) => {
                     return (
                         this.getTablePath(foreignKey) === tablePath &&
-                        foreignKey.referencedColumnNames.indexOf(columnName) !==
-                            -1
+                        foreignKey.referencedColumnNames.includes(columnName)
                     )
                 },
             )
@@ -1373,7 +1371,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         const relatedIndices = table.indices.filter(
             (index) =>
                 index.columnNames.length > 1 &&
-                index.columnNames.indexOf(columnName) !== -1,
+                index.columnNames.includes(columnName),
         )
         if (relatedIndices.length === 0) return
 
@@ -1403,7 +1401,7 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
         const relatedUniques = table.uniques.filter(
             (unique) =>
                 unique.columnNames.length > 1 &&
-                unique.columnNames.indexOf(columnName) !== -1,
+                unique.columnNames.includes(columnName),
         )
         if (relatedUniques.length === 0) return
 

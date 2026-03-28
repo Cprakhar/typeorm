@@ -3102,6 +3102,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                 const metadataRow = dbCheckMetadata.find(
                     (m) =>
                         m["name"] === constraint["CONSTRAINT_NAME"] &&
+                        m["table"] === dbTable["TABLE_NAME"] &&
                         m["schema"] === dbTable["SCHEMA_NAME"],
                 )
                 return new TableCheck({

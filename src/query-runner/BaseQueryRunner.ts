@@ -109,6 +109,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
 
     private cachedTablePaths: Record<string, string> = {}
 
+    private typeormMetadataTableInitializationPromise?: Promise<void>
+
     // -------------------------------------------------------------------------
     // Public Abstract Methods
     // -------------------------------------------------------------------------
@@ -770,12 +772,11 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
     ) {
         await this.createTypeormMetadataTable()
 
-        if (!checkConstraint.name)
-            checkConstraint.name =
-                this.connection.namingStrategy.checkConstraintName(
-                    table,
-                    checkConstraint.expression!,
-                )
+        checkConstraint.name ??=
+            this.connection.namingStrategy.checkConstraintName(
+                table,
+                checkConstraint.expression!,
+            )
 
         const { schema, tableName, database } =
             this.connection.driver.parseTableName(table)
@@ -795,12 +796,11 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
     ) {
         await this.createTypeormMetadataTable()
 
-        if (!checkConstraint.name)
-            checkConstraint.name =
-                this.connection.namingStrategy.checkConstraintName(
-                    table,
-                    checkConstraint.expression!,
-                )
+        checkConstraint.name ??=
+            this.connection.namingStrategy.checkConstraintName(
+                table,
+                checkConstraint.expression!,
+            )
 
         const { schema, tableName, database } =
             this.connection.driver.parseTableName(table)
@@ -824,11 +824,16 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
             database,
         )
 
+        if (this.typeormMetadataTableInitializationPromise !== undefined) {
+            await this.typeormMetadataTableInitializationPromise
+            return
+        }
+
         // Spanner requires at least one primary key in a table.
         // Since we don't have unique column in "typeorm_metadata" table
         // and we should avoid breaking changes, we mark all columns as primary for Spanner driver.
-        const isPrimary = this.connection.driver.options.type === "spanner"
-        await this.createTable(
+        const isPrimary = this.dataSource.driver.options.type === "spanner"
+        this.typeormMetadataTableInitializationPromise = this.createTable(
             new Table({
                 database: database,
                 schema: schema,
@@ -892,5 +897,16 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
             }),
             true,
         )
+
+        try {
+            await this.typeormMetadataTableInitializationPromise
+        } catch (error) {
+            this.typeormMetadataTableInitializationPromise = undefined
+            throw error
+        }
+    }
+
+    protected resetTypeormMetadataTableInitializationPromise(): void {
+        this.typeormMetadataTableInitializationPromise = undefined
     }
 }

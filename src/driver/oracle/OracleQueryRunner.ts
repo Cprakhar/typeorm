@@ -2907,6 +2907,7 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
                     const metadataRow = dbCheckMetadata.find(
                         (m) =>
                             m["name"] === constraint["CONSTRAINT_NAME"] &&
+                            m["table"] === dbTable["TABLE_NAME"] &&
                             m["schema"] === dbTable["OWNER"],
                     )
                     return new TableCheck({

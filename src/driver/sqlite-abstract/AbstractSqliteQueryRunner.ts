@@ -65,6 +65,7 @@ export abstract class AbstractSqliteQueryRunner
      */
     release(): Promise<void> {
         this.loadedTables = []
+        this.resetTypeormMetadataTableInitializationPromise()
         this.clearSqlMemory()
         return Promise.resolve()
     }
