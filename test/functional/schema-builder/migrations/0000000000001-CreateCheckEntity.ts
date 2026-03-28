@@ -6,6 +6,23 @@ import { MyEnum } from "../entity/check-migration/CheckEntity"
 
 export class CreateCheckEntity0000000000001 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<any> {
+        let enumColumnType: string
+        switch (queryRunner.dataSource.driver.options.type) {
+            case "oracle":
+                enumColumnType = "varchar2"
+                break
+            case "mssql":
+            case "sap":
+                enumColumnType = "nvarchar"
+                break
+            case "better-sqlite3":
+            case "sqljs":
+                enumColumnType = "integer"
+                break
+            default:
+                enumColumnType = "text"
+        }
+
         await queryRunner.createTable(
             new Table({
                 name: "check_entity",
@@ -13,7 +30,7 @@ export class CreateCheckEntity0000000000001 implements MigrationInterface {
                     {
                         name: "id",
                         type: DriverUtils.isSQLiteFamily(
-                            queryRunner.connection.driver,
+                            queryRunner.dataSource.driver,
                         )
                             ? "integer"
                             : "int",
@@ -24,25 +41,14 @@ export class CreateCheckEntity0000000000001 implements MigrationInterface {
                     {
                         name: "value",
                         type: DriverUtils.isSQLiteFamily(
-                            queryRunner.connection.driver,
+                            queryRunner.dataSource.driver,
                         )
                             ? "integer"
                             : "int",
                     },
                     {
                         name: "enumValue",
-                        type:
-                            DriverUtils.isSQLiteFamily(
-                                queryRunner.connection.driver,
-                            ) ||
-                            ["mssql", "sap"].includes(
-                                queryRunner.connection.driver.options.type,
-                            )
-                                ? "nvarchar"
-                                : queryRunner.connection.driver.options.type ===
-                                    "oracle"
-                                  ? "varchar2"
-                                  : "text",
+                        type: enumColumnType,
                         enum: Object.values(MyEnum),
                     },
                 ],

@@ -773,13 +773,13 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         await this.createTypeormMetadataTable()
 
         checkConstraint.name ??=
-            this.connection.namingStrategy.checkConstraintName(
+            this.dataSource.namingStrategy.checkConstraintName(
                 table,
                 checkConstraint.expression!,
             )
 
         const { schema, tableName, database } =
-            this.connection.driver.parseTableName(table)
+            this.dataSource.driver.parseTableName(table)
         return this.insertTypeormMetadataSql({
             database,
             type: MetadataTableType.CHECK_CONSTRAINT,
@@ -797,13 +797,13 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         await this.createTypeormMetadataTable()
 
         checkConstraint.name ??=
-            this.connection.namingStrategy.checkConstraintName(
+            this.dataSource.namingStrategy.checkConstraintName(
                 table,
                 checkConstraint.expression!,
             )
 
         const { schema, tableName, database } =
-            this.connection.driver.parseTableName(table)
+            this.dataSource.driver.parseTableName(table)
         return this.deleteTypeormMetadataSql({
             database,
             type: MetadataTableType.CHECK_CONSTRAINT,
@@ -816,10 +816,10 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
     async createTypeormMetadataTable() {
         if (this.sqlMemoryMode === true) return
 
-        const schema = this.connection.driver.schema
-        const database = this.connection.driver.database
-        const typeormMetadataTable = this.connection.driver.buildTableName(
-            this.connection.metadataTableName,
+        const schema = this.dataSource.driver.schema
+        const database = this.dataSource.driver.database
+        const typeormMetadataTable = this.dataSource.driver.buildTableName(
+            this.dataSource.metadataTableName,
             schema,
             database,
         )
@@ -841,8 +841,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
                 columns: [
                     {
                         name: "type",
-                        type: this.connection.driver.normalizeType({
-                            type: this.connection.driver.mappedDataTypes
+                        type: this.dataSource.driver.normalizeType({
+                            type: this.dataSource.driver.mappedDataTypes
                                 .metadataType,
                         }),
                         isNullable: false,
@@ -850,8 +850,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
                     },
                     {
                         name: "database",
-                        type: this.connection.driver.normalizeType({
-                            type: this.connection.driver.mappedDataTypes
+                        type: this.dataSource.driver.normalizeType({
+                            type: this.dataSource.driver.mappedDataTypes
                                 .metadataDatabase,
                         }),
                         isNullable: true,
@@ -859,8 +859,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
                     },
                     {
                         name: "schema",
-                        type: this.connection.driver.normalizeType({
-                            type: this.connection.driver.mappedDataTypes
+                        type: this.dataSource.driver.normalizeType({
+                            type: this.dataSource.driver.mappedDataTypes
                                 .metadataSchema,
                         }),
                         isNullable: true,
@@ -868,8 +868,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
                     },
                     {
                         name: "table",
-                        type: this.connection.driver.normalizeType({
-                            type: this.connection.driver.mappedDataTypes
+                        type: this.dataSource.driver.normalizeType({
+                            type: this.dataSource.driver.mappedDataTypes
                                 .metadataTable,
                         }),
                         isNullable: true,
@@ -877,8 +877,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
                     },
                     {
                         name: "name",
-                        type: this.connection.driver.normalizeType({
-                            type: this.connection.driver.mappedDataTypes
+                        type: this.dataSource.driver.normalizeType({
+                            type: this.dataSource.driver.mappedDataTypes
                                 .metadataName,
                         }),
                         isNullable: true,
@@ -886,8 +886,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
                     },
                     {
                         name: "value",
-                        type: this.connection.driver.normalizeType({
-                            type: this.connection.driver.mappedDataTypes
+                        type: this.dataSource.driver.normalizeType({
+                            type: this.dataSource.driver.mappedDataTypes
                                 .metadataValue,
                         }),
                         isNullable: true,
