@@ -649,6 +649,9 @@ export class CockroachQueryRunner
             const isTableExist = await this.hasTable(table)
             if (isTableExist) return Promise.resolve()
         }
+
+        const currentSchema = await this.getCurrentSchema()
+        const schema = this.driver.parseTableName(table).schema ?? currentSchema
         const upQueries: Query[] = []
         const downQueries: Query[] = []
 
@@ -724,10 +727,6 @@ export class CockroachQueryRunner
         )
 
         for (const column of generatedColumns) {
-            const currentSchema = await this.getCurrentSchema()
-            let { schema } = this.driver.parseTableName(table)
-            schema ??= currentSchema
-
             const insertQuery = this.insertTypeormMetadataSql({
                 schema: schema,
                 table: table.name,
@@ -784,6 +783,9 @@ export class CockroachQueryRunner
         const createForeignKeys: boolean = dropForeignKeys
         const tablePath = this.getTablePath(target)
         const table = await this.getCachedTable(tablePath)
+        const currentSchema = await this.getCurrentSchema()
+        const schema = this.driver.parseTableName(table).schema ?? currentSchema
+
         const upQueries: Query[] = []
         const downQueries: Query[] = []
 
@@ -832,10 +834,6 @@ export class CockroachQueryRunner
         )
 
         for (const column of generatedColumns) {
-            const currentSchema = await this.getCurrentSchema()
-            let { schema } = this.driver.parseTableName(table)
-            schema ??= currentSchema
-
             const deleteQuery = this.deleteTypeormMetadataSql({
                 schema: schema,
                 table: table.name,
@@ -1247,8 +1245,9 @@ export class CockroachQueryRunner
 
         if (column.generatedType && column.asExpression) {
             const currentSchema = await this.getCurrentSchema()
-            let { schema } = this.driver.parseTableName(table)
-            schema ??= currentSchema
+            const schema =
+                this.driver.parseTableName(table).schema ?? currentSchema
+
             const insertQuery = this.insertTypeormMetadataSql({
                 schema: schema,
                 table: table.name,
@@ -2371,8 +2370,9 @@ export class CockroachQueryRunner
 
         if (column.generatedType && column.asExpression) {
             const currentSchema = await this.getCurrentSchema()
-            let { schema } = this.driver.parseTableName(table)
-            schema ??= currentSchema
+            const schema =
+                this.driver.parseTableName(table).schema ?? currentSchema
+
             const deleteQuery = this.deleteTypeormMetadataSql({
                 schema: schema,
                 table: table.name,

@@ -676,8 +676,11 @@ export class SqlServerQueryRunner
             const isTableExist = await this.hasTable(table)
             if (isTableExist) return Promise.resolve()
         }
+
         const upQueries: Query[] = []
         const downQueries: Query[] = []
+        const parsedTableName = this.driver.parseTableName(table)
+        parsedTableName.schema ??= await this.getCurrentSchema()
 
         upQueries.push(this.createTableSql(table, createForeignKeys))
         downQueries.push(this.dropTableSql(table))
@@ -708,10 +711,6 @@ export class SqlServerQueryRunner
         )
 
         for (const column of generatedColumns) {
-            const parsedTableName = this.driver.parseTableName(table)
-
-            parsedTableName.schema ??= await this.getCurrentSchema()
-
             const insertQuery = this.insertTypeormMetadataSql({
                 database: parsedTableName.database,
                 schema: parsedTableName.schema,
@@ -770,6 +769,8 @@ export class SqlServerQueryRunner
             : await this.getCachedTable(tableOrName)
         const upQueries: Query[] = []
         const downQueries: Query[] = []
+        const parsedTableName = this.driver.parseTableName(table)
+        parsedTableName.schema ??= await this.getCurrentSchema()
 
         // It needs because if table does not exist and dropForeignKeys or dropIndices is true, we don't need
         // to perform drop queries for foreign keys and indices.
@@ -797,10 +798,6 @@ export class SqlServerQueryRunner
         )
 
         for (const column of generatedColumns) {
-            const parsedTableName = this.driver.parseTableName(table)
-
-            parsedTableName.schema ??= await this.getCurrentSchema()
-
             const deleteQuery = this.deleteTypeormMetadataSql({
                 database: parsedTableName.database,
                 schema: parsedTableName.schema,
@@ -1128,6 +1125,8 @@ export class SqlServerQueryRunner
         const clonedTable = table.clone()
         const upQueries: Query[] = []
         const downQueries: Query[] = []
+        const parsedTableName = this.driver.parseTableName(table)
+        parsedTableName.schema ??= await this.getCurrentSchema()
 
         upQueries.push(
             new Query(
@@ -1262,10 +1261,6 @@ export class SqlServerQueryRunner
         }
 
         if (column.generatedType && column.asExpression) {
-            const parsedTableName = this.driver.parseTableName(table)
-
-            parsedTableName.schema ??= await this.getCurrentSchema()
-
             const insertQuery = this.insertTypeormMetadataSql({
                 database: parsedTableName.database,
                 schema: parsedTableName.schema,
