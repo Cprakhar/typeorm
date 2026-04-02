@@ -3,6 +3,8 @@ import chaiFriendly from "eslint-plugin-chai-friendly"
 import { defineConfig, globalIgnores } from "eslint/config"
 import globals from "globals"
 import ts from "typescript-eslint"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
 export default defineConfig([
     globalIgnores([
@@ -18,6 +20,7 @@ export default defineConfig([
             parser: ts.parser,
             parserOptions: {
                 project: "tsconfig.json",
+                tsconfigRootDir: path.dirname(fileURLToPath(import.meta.url)),
             },
             globals: {
                 ...globals.node,
