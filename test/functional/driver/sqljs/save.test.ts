@@ -1,6 +1,6 @@
 import "reflect-metadata"
 import fs from "fs/promises"
-import path from "path"
+import path from "node:path"
 import { expect } from "chai"
 import {
     closeTestingConnections,

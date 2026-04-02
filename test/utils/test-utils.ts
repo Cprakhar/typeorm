@@ -11,7 +11,7 @@ import type {
 } from "../../src"
 import { DataSource, getMetadataArgsStorage, Table } from "../../src"
 import type { QueryResultCache } from "../../src/cache/QueryResultCache"
-import path from "path"
+import path from "node:path"
 import { ObjectUtils } from "../../src/util/ObjectUtils"
 import type { EntitySubscriberMetadataArgs } from "../../src/metadata-args/EntitySubscriberMetadataArgs"
 

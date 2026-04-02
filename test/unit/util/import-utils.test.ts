@@ -1,6 +1,6 @@
 import { expect } from "chai"
 import fs from "fs/promises"
-import path from "path"
+import path from "node:path"
 import { strict as assert } from "assert"
 import sinon from "sinon"
 import fsAsync from "fs"
@@ -17,7 +17,7 @@ describe("ImportUtils.importOrRequireFile", () => {
 
         const jsFilePath = path.join(srcDir, "file.js")
         const jsFileContent = `
-            import path from "path";
+            import path from "node:path";
             export default function test() {}
             export const number = 6;
         `
@@ -56,7 +56,7 @@ describe("ImportUtils.importOrRequireFile", () => {
 
         const jsFilePath = path.join(srcDir, "file.js")
         const jsFileContent = `
-            const path = require("path");
+            const path = require("node:path");
             module.exports = {
                 test() {},
                 number: 6
@@ -94,7 +94,7 @@ describe("ImportUtils.importOrRequireFile", () => {
 
         const jsFilePath = path.join(srcDir, "file.mjs")
         const jsFileContent = `
-            import path from "path";
+            import path from "node:path";
             export default function test() {}
             export const number = 6;
         `
@@ -125,7 +125,7 @@ describe("ImportUtils.importOrRequireFile", () => {
 
         const jsFilePath = path.join(srcDir, "file.cjs")
         const jsFileContent = `
-            const path = require("path");
+            const path = require("node:path");
             module.exports = {
                 test() {},
                 number: 6

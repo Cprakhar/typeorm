@@ -1,6 +1,6 @@
 import ansi from "ansis"
 import fs from "fs"
-import path from "path"
+import path from "node:path"
 import { highlight } from "sql-highlight"
 import { format as sqlFormat } from "@sqltools/formatter"
 import { type Config as SqlFormatterConfig } from "@sqltools/formatter/lib/core/types"

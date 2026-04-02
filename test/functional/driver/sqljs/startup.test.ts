@@ -1,5 +1,5 @@
 import "reflect-metadata"
-import * as path from "path"
+import * as path from "node:path"
 import { expect } from "chai"
 import { Post } from "./entity/Post"
 import type { DataSource } from "../../../../src/data-source/DataSource"

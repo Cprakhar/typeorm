@@ -1,6 +1,6 @@
 import { expect } from "chai"
 import { rm } from "fs/promises"
-import { dirname } from "path"
+import { dirname } from "node:path"
 
 import { DataSource } from "../../../src/data-source/DataSource"
 import { getTypeOrmConfig } from "../../utils/test-utils"

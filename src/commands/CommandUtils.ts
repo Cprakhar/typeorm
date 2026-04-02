@@ -1,5 +1,5 @@
 import fs from "fs/promises"
-import path from "path"
+import path from "node:path"
 import { TypeORMError } from "../error"
 import type { DataSource } from "../data-source"
 import { InstanceChecker } from "../util/InstanceChecker"

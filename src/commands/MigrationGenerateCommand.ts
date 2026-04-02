@@ -1,6 +1,6 @@
 import { format } from "@sqltools/formatter/lib/sqlFormatter"
 import ansi from "ansis"
-import path from "path"
+import path from "node:path"
 import process from "process"
 import type yargs from "yargs"
 import type { DataSource } from "../data-source"

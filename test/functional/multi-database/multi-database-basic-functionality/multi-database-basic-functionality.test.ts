@@ -1,7 +1,7 @@
 import appRoot from "app-root-path"
 import { expect } from "chai"
 import fs from "fs/promises"
-import path from "path"
+import path from "node:path"
 import { glob } from "tinyglobby"
 
 import type { DataSource } from "../../../../src/data-source/DataSource"

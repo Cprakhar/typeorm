@@ -1,5 +1,5 @@
 import appRootPath from "app-root-path"
-import path from "path"
+import path from "node:path"
 
 import type { DataSourceOptions } from "../data-source/DataSourceOptions"
 import { TypeORMError } from "../error"

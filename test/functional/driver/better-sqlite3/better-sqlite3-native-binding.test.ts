@@ -5,7 +5,7 @@ import {
     reloadTestingDatabases,
 } from "../../../utils/test-utils"
 import { expect } from "chai"
-import { join } from "path"
+import { join } from "node:path"
 import type { DataSource } from "../../../../src"
 import type { BetterSqlite3DataSourceOptions } from "../../../../src/driver/better-sqlite3/BetterSqlite3DataSourceOptions"
 

@@ -9,7 +9,7 @@ You have 3 options to mitigate this. The 3 options are shown below as diff to th
 ```typescript
 import legacy from "@vitejs/plugin-legacy"
 import vue from "@vitejs/plugin-vue"
-import path from "path"
+import path from "node:path"
 import { defineConfig } from "vite"
 
 // https://vitejs.dev/config/

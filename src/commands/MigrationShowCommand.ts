@@ -2,7 +2,7 @@ import type { DataSource } from "../data-source"
 import * as process from "process"
 import type * as yargs from "yargs"
 import { PlatformTools } from "../platform/PlatformTools"
-import path from "path"
+import path from "node:path"
 import { CommandUtils } from "./CommandUtils"
 
 /**
