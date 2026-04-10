@@ -1302,8 +1302,8 @@ export class MongoEntityManager extends EntityManager {
     /**
      * Overrides cursor's toArray and next methods to convert results to entity automatically.
      *
-     * @param cursor
      * @param metadata
+     * @param cursor
      */
     protected applyEntityTransformationToCursor<Entity extends ObjectLiteral>(
         metadata: EntityMetadata,
@@ -1505,7 +1505,7 @@ export class MongoEntityManager extends EntityManager {
         originalNext: () => Promise<Entity | null>,
         transformer: DocumentToEntityTransformer,
         metadata: EntityMetadata,
-        queryrunner: MongoQueryRunner,
+        queryRunner: MongoQueryRunner,
     ): Promise<Entity[]> {
         const patchedNext = cursor.next.bind(cursor)
         cursor.next = originalNext
@@ -1522,7 +1522,7 @@ export class MongoEntityManager extends EntityManager {
             .filter((entity) => entity !== null)
 
         if (entities.length > 0)
-            await queryrunner.broadcaster.broadcast("Load", metadata, entities)
+            await queryRunner.broadcaster.broadcast("Load", metadata, entities)
 
         return entities
     }
@@ -1531,7 +1531,7 @@ export class MongoEntityManager extends EntityManager {
         originalNext: () => Promise<Entity | null>,
         transformer: DocumentToEntityTransformer,
         metadata: EntityMetadata,
-        queryrunner: MongoQueryRunner,
+        queryRunner: MongoQueryRunner,
     ): Promise<Entity | null> {
         const document = await originalNext()
         if (document === null) return null
@@ -1542,7 +1542,7 @@ export class MongoEntityManager extends EntityManager {
         )
         if (entity === null) return null
 
-        await queryrunner.broadcaster.broadcast("Load", metadata, [entity])
+        await queryRunner.broadcaster.broadcast("Load", metadata, [entity])
 
         return entity
     }

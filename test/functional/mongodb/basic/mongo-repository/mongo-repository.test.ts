@@ -312,12 +312,16 @@ describe("mongodb > MongoRepository", () => {
                 }
 
                 const cursor = postRepository.createEntityCursor()
-                const loadedPosts = []
-                loadedPosts.push(
-                    await cursor.next(),
-                    ...(await cursor.toArray()),
-                )
-                expect(loadedPosts).to.have.length(10)
+                const firstPost = await cursor.next()
+                expect(firstPost).to.be.not.null
+                expect(firstPost).to.be.instanceOf(Post)
+                const restPosts = await cursor.toArray()
+                expect(restPosts).to.have.length(9)
+                expect(
+                    restPosts.every(
+                        (post) => post instanceof Post && post !== null,
+                    ),
+                ).to.be.true
             }),
         ))
 
@@ -337,6 +341,11 @@ describe("mongodb > MongoRepository", () => {
                 const cursor = postRepository.createEntityCursor()
                 const loadedPosts = await cursor.toArray()
                 expect(loadedPosts).to.have.length(10)
+                expect(
+                    loadedPosts.every(
+                        (post) => post instanceof Post && post !== null,
+                    ),
+                ).to.be.true
             }),
         ))
 
@@ -359,7 +368,11 @@ describe("mongodb > MongoRepository", () => {
                     loadedPosts.push(post)
                 }
                 expect(loadedPosts).to.have.length(10)
-                expect(loadedPosts[0]).to.be.instanceOf(Post)
+                expect(
+                    loadedPosts.every(
+                        (post) => post instanceof Post && post !== null,
+                    ),
+                ).to.be.true
             }),
         ))
 })
