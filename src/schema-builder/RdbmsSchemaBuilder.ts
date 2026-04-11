@@ -1100,8 +1100,9 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             return
 
         for (const metadata of this.entityToSyncMetadatas) {
-            const table = await this.queryRunner.getTable(
-                this.getTablePath(metadata),
+            const table = this.tables.find(
+                (table) =>
+                    this.getTablePath(table) === this.getTablePath(metadata),
             )
             if (!table) continue
 
@@ -1150,8 +1151,9 @@ export class RdbmsSchemaBuilder implements SchemaBuilder {
             return
 
         for (const metadata of this.entityToSyncMetadatas) {
-            const table = await this.queryRunner.getTable(
-                this.getTablePath(metadata),
+            const table = this.tables.find(
+                (table) =>
+                    this.getTablePath(table) === this.getTablePath(metadata),
             )
             if (!table) continue
 
