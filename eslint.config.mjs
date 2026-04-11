@@ -1,19 +1,20 @@
 import js from "@eslint/js"
-import { defineConfig } from "eslint/config"
+import chaiFriendly from "eslint-plugin-chai-friendly"
 import { jsdoc } from "eslint-plugin-jsdoc"
+import { defineConfig, globalIgnores } from "eslint/config"
 import globals from "globals"
 import ts from "typescript-eslint"
 
 export default defineConfig([
-    {
-        ignores: [
-            "build/**",
-            "docs/**",
-            "node_modules/**",
-            "sample/playground/**",
-            "temp/**",
-        ],
-    },
+    globalIgnores([
+        "build/**",
+        "docs/**",
+        "node_modules/**",
+        "packages/**",
+        "sample/playground/**",
+        "src/driver/mongodb/{typings.ts,bson.typings.ts}",
+        "temp/**",
+    ]),
 
     {
         files: ["**/*.ts"],
@@ -31,11 +32,15 @@ export default defineConfig([
             js,
             ts,
         },
-        extends: [
-            js.configs.recommended,
-            ...ts.configs.recommendedTypeChecked,
-        ],
+        extends: [js.configs.recommended, ...ts.configs.recommendedTypeChecked],
         rules: {
+            // custom rules
+            "@typescript-eslint/consistent-type-exports": "error",
+            "@typescript-eslint/consistent-type-imports": "error",
+            "@typescript-eslint/prefer-nullish-coalescing": "error",
+            "@typescript-eslint/prefer-optional-chain": "error",
+            "@typescript-eslint/prefer-string-starts-ends-with": "error",
+
             // exceptions from typescript-eslint/recommended
             "@typescript-eslint/ban-ts-comment": "warn",
             "@typescript-eslint/no-empty-object-type": "warn",
@@ -45,12 +50,11 @@ export default defineConfig([
             "@typescript-eslint/no-unnecessary-type-constraint": "warn",
             "@typescript-eslint/no-unsafe-declaration-merging": "warn",
             "@typescript-eslint/no-unsafe-function-type": "warn",
-            "@typescript-eslint/no-unused-expressions": "warn",
             "@typescript-eslint/no-unused-vars": [
                 "warn",
                 {
                     argsIgnorePattern: "^_",
-                    destructuredArrayIgnorePattern: "^_"
+                    destructuredArrayIgnorePattern: "^_",
                 },
             ],
             "@typescript-eslint/no-wrapper-object-types": "off",
@@ -83,21 +87,37 @@ export default defineConfig([
 
             // exceptions for eslint/recommended
             "no-async-promise-executor": "warn",
+            "no-useless-assignment": "warn",
             "no-control-regex": "warn",
             "no-empty": "warn",
             "no-loss-of-precision": "warn",
             "no-prototype-builtins": "warn",
             "no-regex-spaces": "warn",
+            "no-return-assign": ["error", "always"],
+            "preserve-caught-error": "warn",
         },
     },
 
     jsdoc({
-        config: "flat/recommended-typescript",
         files: ["src/**/*.ts"],
+        config: "flat/recommended-typescript", // change to 'flat/recommended-typescript-error' once warnings are fixed
         // Temporarily enable individual rules when they are fixed, until all current warnings are gone,
         // and then remove manual config in favor of `config: "flat/recommended-typescript-error"`
         rules: {
-            "jsdoc/valid-types": "error"
-        }
+            "jsdoc/valid-types": "error",
+            "jsdoc/tag-lines": [
+                "error",
+                "any",
+                {
+                    startLines: 1,
+                    tags: { example: { lines: "always", count: 1 } },
+                },
+            ],
+        },
     }),
+
+    {
+        files: ["test/**/*.ts"],
+        ...chaiFriendly.configs.recommendedFlat,
+    },
 ])

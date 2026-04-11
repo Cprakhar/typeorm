@@ -1,5 +1,4 @@
 import ansi from "ansis"
-import dotenv from "dotenv"
 import fs from "fs"
 import path from "path"
 import { highlight } from "sql-highlight"
@@ -30,6 +29,8 @@ export class PlatformTools {
     /**
      * Reads the version string from package.json of the given package.
      * This operation is only supported in node.
+     *
+     * @param name
      */
     static readPackageVersion(name: string): string {
         try {
@@ -37,6 +38,7 @@ export class PlatformTools {
         } catch (err) {
             throw new TypeError(
                 `Failed to read package.json for "${name}": ${err.message}`,
+                { cause: err },
             )
         }
     }
@@ -44,6 +46,8 @@ export class PlatformTools {
     /**
      * Loads ("require"-s) given file or package.
      * This operation only supports on node platform
+     *
+     * @param name
      */
     static load(name: string): any {
         // if name is not absolute or relative, then try to load package from the node_modules of the directory we are currently in
@@ -77,9 +81,6 @@ export class PlatformTools {
                 /**
                  * mysql
                  */
-                case "mysql":
-                    return require("mysql")
-
                 case "mysql2":
                     return require("mysql2")
 
@@ -120,12 +121,6 @@ export class PlatformTools {
                     return require("better-sqlite3")
 
                 /**
-                 * sqlite
-                 */
-                case "sqlite3":
-                    return require("sqlite3")
-
-                /**
                  * sql.js
                  */
                 case "sql.js":
@@ -144,9 +139,9 @@ export class PlatformTools {
                     return require("react-native-sqlite-storage")
             }
         } catch (err) {
-            return require(path.resolve(
-                process.cwd() + "/node_modules/" + name,
-            ))
+            return require(
+                path.resolve(process.cwd() + "/node_modules/" + name),
+            )
         }
 
         // If nothing above matched and we get here, the package was not listed within PlatformTools
@@ -158,6 +153,8 @@ export class PlatformTools {
 
     /**
      * Normalizes given path. Does "path.normalize" and replaces backslashes with forward slashes on Windows.
+     *
+     * @param pathStr
      */
     static pathNormalize(pathStr: string): string {
         let normalizedPath = path.normalize(pathStr)
@@ -168,6 +165,8 @@ export class PlatformTools {
 
     /**
      * Gets file extension. Does "path.extname".
+     *
+     * @param pathStr
      */
     static pathExtname(pathStr: string): string {
         return path.extname(pathStr)
@@ -175,6 +174,8 @@ export class PlatformTools {
 
     /**
      * Resolved given path. Does "path.resolve".
+     *
+     * @param pathStr
      */
     static pathResolve(pathStr: string): string {
         return path.resolve(pathStr)
@@ -182,12 +183,14 @@ export class PlatformTools {
 
     /**
      * Synchronously checks if file exist. Does "fs.existsSync".
+     *
+     * @param pathStr
      */
     static fileExist(pathStr: string): boolean {
         return fs.existsSync(pathStr)
     }
 
-    static readFileSync(filename: string): Buffer {
+    static readFileSync(filename: string): Uint8Array {
         return fs.readFileSync(filename)
     }
 
@@ -200,23 +203,9 @@ export class PlatformTools {
     }
 
     /**
-     * Loads a dotenv file into the environment variables.
-     *
-     * @param path The file to load as a dotenv configuration
-     */
-    static dotenv(pathStr: string): void {
-        dotenv.config({ path: pathStr })
-    }
-
-    /**
-     * Gets environment variable.
-     */
-    static getEnvVariable(name: string): any {
-        return process.env[name]
-    }
-
-    /**
      * Highlights sql string to be printed in the console.
+     *
+     * @param sql
      */
     static highlightSql(sql: string) {
         return highlight(sql, {
@@ -236,6 +225,9 @@ export class PlatformTools {
 
     /**
      * Pretty-print sql string to be print in the console.
+     *
+     * @param sql
+     * @param dataSourceType
      */
     static formatSql(sql: string, dataSourceType?: DatabaseType): string {
         const databaseLanguageMap: Record<
@@ -246,7 +238,7 @@ export class PlatformTools {
         }
 
         const databaseLanguage = dataSourceType
-            ? databaseLanguageMap[dataSourceType] || "sql"
+            ? (databaseLanguageMap[dataSourceType] ?? "sql")
             : "sql"
 
         return sqlFormat(sql, {
@@ -257,6 +249,9 @@ export class PlatformTools {
 
     /**
      * Logging functions needed by AdvancedConsoleLogger
+     *
+     * @param prefix
+     * @param info
      */
     static logInfo(prefix: string, info: any) {
         console.log(ansi.gray.underline(prefix), info)
