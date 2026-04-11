@@ -3539,7 +3539,7 @@ export class PostgresQueryRunner
     // -------------------------------------------------------------------------
 
     protected async loadViews(viewNames?: string[]): Promise<View[]> {
-        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
+        const hasTable = await this.hasTypeormMetadataTable()
 
         if (!hasTable) return []
 
@@ -3783,7 +3783,7 @@ export class PostgresQueryRunner
         let dbCheckMetadata: ObjectLiteral[] = []
 
         const metadataTableName = this.getTypeormMetadataTableName()
-        if (await this.hasTable(metadataTableName)) {
+        if (await this.hasTypeormMetadataTable()) {
             const metadataCondition = dbTables
                 .map(({ table_schema, table_name }) => {
                     return `("schema" = '${table_schema}' AND "table" = '${table_name}')`

@@ -111,6 +111,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
 
     private typeormMetadataTableInitializationPromise?: Promise<void>
 
+    private typeormMetadataTableExists?: boolean
+
     // -------------------------------------------------------------------------
     // Public Abstract Methods
     // -------------------------------------------------------------------------
@@ -146,6 +148,13 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         parameters?: any[],
         useStructuredResult?: boolean,
     ): Promise<any>
+
+    /**
+     * Checks if table with the given name exist in the database.
+     *
+     * @param tableOrName
+     */
+    abstract hasTable(tableOrName: Table | string): Promise<boolean>
 
     /**
      * Tagged template function that executes raw SQL query and returns raw database results.
@@ -428,6 +437,26 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
             options.schema,
             options.database,
         )
+    }
+
+    /**
+     * Checks if the typeorm metadata table exists in the database.
+     */
+    protected async hasTypeormMetadataTable(): Promise<boolean> {
+        if (this.typeormMetadataTableExists !== undefined) {
+            return this.typeormMetadataTableExists
+        }
+
+        if (this.typeormMetadataTableInitializationPromise !== undefined) {
+            await this.typeormMetadataTableInitializationPromise
+            this.typeormMetadataTableExists = true
+            return true
+        }
+
+        this.typeormMetadataTableExists = await this.hasTable(
+            this.getTypeormMetadataTableName(),
+        )
+        return this.typeormMetadataTableExists
     }
 
     /**
@@ -766,6 +795,12 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         )
     }
 
+    /**
+     * Inserts a record about the given check constraint into the typeorm metadata table.
+     *
+     * @param table
+     * @param checkConstraint
+     */
     protected async insertCheckConstraintMetadata(
         table: Table,
         checkConstraint: TableCheck,
@@ -790,6 +825,12 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         })
     }
 
+    /**
+     * Deletes a record about the given check constraint from the typeorm metadata table.
+     *
+     * @param table
+     * @param checkConstraint
+     */
     protected async dropCheckConstraintMetadata(
         table: Table,
         checkConstraint: TableCheck,
@@ -813,8 +854,13 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         })
     }
 
+    /**
+     * Creates the typeorm metadata table if it does not exist.
+     */
     async createTypeormMetadataTable() {
         if (this.sqlMemoryMode === true) return
+
+        if (this.typeormMetadataTableExists === true) return
 
         const schema = this.dataSource.driver.schema
         const database = this.dataSource.driver.database
@@ -826,6 +872,7 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
 
         if (this.typeormMetadataTableInitializationPromise !== undefined) {
             await this.typeormMetadataTableInitializationPromise
+            this.typeormMetadataTableExists = true
             return
         }
 
@@ -900,13 +947,18 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
 
         try {
             await this.typeormMetadataTableInitializationPromise
+            this.typeormMetadataTableExists = true
         } catch (error) {
             this.typeormMetadataTableInitializationPromise = undefined
             throw error
         }
     }
 
+    /**
+     * Resets typeorm metadata table initialization promise and existence flag.
+     */
     protected resetTypeormMetadataTableInitializationPromise(): void {
         this.typeormMetadataTableInitializationPromise = undefined
+        this.typeormMetadataTableExists = undefined
     }
 }

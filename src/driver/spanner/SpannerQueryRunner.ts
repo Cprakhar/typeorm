@@ -1915,7 +1915,7 @@ export class SpannerQueryRunner extends BaseQueryRunner implements QueryRunner {
 
         let dbCheckMetadata: ObjectLiteral[] = []
         const metadataTableName = this.getTypeormMetadataTableName()
-        if (await this.hasTable(metadataTableName)) {
+        if (await this.hasTypeormMetadataTable()) {
             const metadataCondition = dbTables
                 .map(({ TABLE_NAME }) => `("table" = '${TABLE_NAME}')`)
                 .join(" OR ")

@@ -2480,7 +2480,7 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
     // -------------------------------------------------------------------------
 
     protected async loadViews(viewNames?: string[]): Promise<View[]> {
-        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
+        const hasTable = await this.hasTypeormMetadataTable()
         if (!hasTable) {
             return []
         }
@@ -2614,7 +2614,7 @@ export class OracleQueryRunner extends BaseQueryRunner implements QueryRunner {
 
         let dbCheckMetadata: ObjectLiteral[] = []
         const metadataTableName = this.getTypeormMetadataTableName()
-        if (await this.hasTable(metadataTableName)) {
+        if (await this.hasTypeormMetadataTable()) {
             const metadataCondition = dbTables
                 .map(
                     ({ OWNER, TABLE_NAME }) =>

@@ -1445,7 +1445,7 @@ export abstract class AbstractSqliteQueryRunner
     // -------------------------------------------------------------------------
 
     protected async loadViews(viewNames?: string[]): Promise<View[]> {
-        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
+        const hasTable = await this.hasTypeormMetadataTable()
         if (!hasTable) {
             return []
         }
@@ -1570,7 +1570,7 @@ export abstract class AbstractSqliteQueryRunner
 
         let dbCheckMetadata: ObjectLiteral[] = []
         const metadataTableName = this.getTypeormMetadataTableName()
-        if (await this.hasTable(metadataTableName)) {
+        if (await this.hasTypeormMetadataTable()) {
             const metadataCondition = dbTables
                 .map(({ name }) => `("table" = '${name}')`)
                 .join(" OR ")

@@ -2999,7 +2999,7 @@ export class SqlServerQueryRunner
     // -------------------------------------------------------------------------
 
     protected async loadViews(viewPaths?: string[]): Promise<View[]> {
-        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
+        const hasTable = await this.hasTypeormMetadataTable()
         if (!hasTable) {
             return []
         }
@@ -3293,7 +3293,7 @@ export class SqlServerQueryRunner
 
         let dbCheckMetadata: ObjectLiteral[] = []
         const metadataTableName = this.getTypeormMetadataTableName()
-        if (await this.hasTable(metadataTableName)) {
+        if (await this.hasTypeormMetadataTable()) {
             const metadataCondition = dbTables
                 .map(
                     ({ TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME }) =>

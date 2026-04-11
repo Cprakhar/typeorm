@@ -3151,7 +3151,7 @@ export class CockroachQueryRunner
     // -------------------------------------------------------------------------
 
     protected async loadViews(viewNames?: string[]): Promise<View[]> {
-        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
+        const hasTable = await this.hasTypeormMetadataTable()
         if (!hasTable) {
             return []
         }
@@ -3319,7 +3319,7 @@ export class CockroachQueryRunner
         let dbCheckMetadata: ObjectLiteral[] = []
 
         const metadataTableName = this.getTypeormMetadataTableName()
-        if (await this.hasTable(metadataTableName)) {
+        if (await this.hasTypeormMetadataTable()) {
             const metadataCondition = dbTables
                 .map(({ table_name, table_schema }) => {
                     return `("schema" = '${table_schema}' AND "table" = '${table_name}')`
