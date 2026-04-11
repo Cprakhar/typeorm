@@ -835,7 +835,8 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         table: Table,
         checkConstraint: TableCheck,
     ) {
-        await this.createTypeormMetadataTable()
+        const hasTable = await this.hasTypeormMetadataTable()
+        if (!hasTable) return
 
         checkConstraint.name ??=
             this.dataSource.namingStrategy.checkConstraintName(

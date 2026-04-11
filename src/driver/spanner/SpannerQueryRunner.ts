@@ -615,9 +615,9 @@ export class SpannerQueryRunner extends BaseQueryRunner implements QueryRunner {
             upQueries.push(
                 await this.insertCheckConstraintMetadata(table, check),
             )
-            downQueries.push(
-                await this.dropCheckConstraintMetadata(table, check),
-            )
+
+            const query = await this.dropCheckConstraintMetadata(table, check)
+            if (query) downQueries.push(query)
         }
 
         await this.executeQueries(upQueries, downQueries)
@@ -689,7 +689,9 @@ export class SpannerQueryRunner extends BaseQueryRunner implements QueryRunner {
             downQueries.push(insertQuery)
         }
         for (const check of table.checks) {
-            upQueries.push(await this.dropCheckConstraintMetadata(table, check))
+            const query = await this.dropCheckConstraintMetadata(table, check)
+            if (query) upQueries.push(query)
+
             downQueries.push(
                 await this.insertCheckConstraintMetadata(table, check),
             )
@@ -1319,10 +1321,13 @@ export class SpannerQueryRunner extends BaseQueryRunner implements QueryRunner {
             this.createCheckConstraintSql(table, checkConstraint),
             await this.insertCheckConstraintMetadata(table, checkConstraint),
         )
-        down.push(
-            this.dropCheckConstraintSql(table, checkConstraint),
-            await this.dropCheckConstraintMetadata(table, checkConstraint),
+        down.push(this.dropCheckConstraintSql(table, checkConstraint))
+        const query = await this.dropCheckConstraintMetadata(
+            table,
+            checkConstraint,
         )
+        if (query) down.push(query)
+
         await this.executeQueries(up, down)
         table.addCheckConstraint(checkConstraint)
     }
@@ -1371,10 +1376,13 @@ export class SpannerQueryRunner extends BaseQueryRunner implements QueryRunner {
         }
         const up: Query[] = []
         const down: Query[] = []
-        up.push(
-            this.dropCheckConstraintSql(table, checkConstraint),
-            await this.dropCheckConstraintMetadata(table, checkConstraint),
+        up.push(this.dropCheckConstraintSql(table, checkConstraint))
+        const query = await this.dropCheckConstraintMetadata(
+            table,
+            checkConstraint,
         )
+        if (query) up.push(query)
+
         down.push(
             this.createCheckConstraintSql(table, checkConstraint),
             await this.insertCheckConstraintMetadata(table, checkConstraint),

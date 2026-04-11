@@ -633,15 +633,13 @@ export class PostgresQueryRunner
         upQueries.push(this.createTableSql(table, createForeignKeys))
         downQueries.push(this.dropTableSql(table))
 
-        if (table.checks.length > 0) {
-            for (const check of table.checks) {
-                upQueries.push(
-                    await this.insertCheckConstraintMetadata(table, check),
-                )
-                downQueries.push(
-                    await this.dropCheckConstraintMetadata(table, check),
-                )
-            }
+        for (const check of table.checks) {
+            upQueries.push(
+                await this.insertCheckConstraintMetadata(table, check),
+            )
+
+            const query = await this.dropCheckConstraintMetadata(table, check)
+            if (query) downQueries.push(query)
         }
 
         // if createForeignKeys is true, we must drop created foreign keys in down query.
@@ -727,9 +725,12 @@ export class PostgresQueryRunner
         // if table had check constraints, we must remove their metadata from the metadata table
         if (table.checks.length > 0) {
             for (const check of table.checks) {
-                upQueries.push(
-                    await this.dropCheckConstraintMetadata(table, check),
+                const query = await this.dropCheckConstraintMetadata(
+                    table,
+                    check,
                 )
+                if (query) upQueries.push(query)
+
                 downQueries.push(
                     await this.insertCheckConstraintMetadata(table, check),
                 )
@@ -2991,10 +2992,13 @@ export class PostgresQueryRunner
             this.createCheckConstraintSql(table, checkConstraint),
             await this.insertCheckConstraintMetadata(table, checkConstraint),
         )
-        down.push(
-            this.dropCheckConstraintSql(table, checkConstraint),
-            await this.dropCheckConstraintMetadata(table, checkConstraint),
+        down.push(this.dropCheckConstraintSql(table, checkConstraint))
+        const query = await this.dropCheckConstraintMetadata(
+            table,
+            checkConstraint,
         )
+        if (query) down.push(query)
+
         await this.executeQueries(up, down)
         table.addCheckConstraint(checkConstraint)
     }
@@ -3042,10 +3046,13 @@ export class PostgresQueryRunner
 
         const up: Query[] = []
         const down: Query[] = []
-        up.push(
-            this.dropCheckConstraintSql(table, checkConstraint, ifExists),
-            await this.dropCheckConstraintMetadata(table, checkConstraint),
+        up.push(this.dropCheckConstraintSql(table, checkConstraint, ifExists))
+        const query = await this.dropCheckConstraintMetadata(
+            table,
+            checkConstraint,
         )
+        if (query) up.push(query)
+
         down.push(
             this.createCheckConstraintSql(table, checkConstraint),
             await this.insertCheckConstraintMetadata(table, checkConstraint),

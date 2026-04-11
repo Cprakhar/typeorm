@@ -372,9 +372,9 @@ export abstract class AbstractSqliteQueryRunner
             upQueries.push(
                 await this.insertCheckConstraintMetadata(table, check),
             )
-            downQueries.push(
-                await this.dropCheckConstraintMetadata(table, check),
-            )
+
+            const query = await this.dropCheckConstraintMetadata(table, check)
+            if (query) downQueries.push(query)
         }
 
         await this.executeQueries(upQueries, downQueries)
@@ -441,7 +441,9 @@ export abstract class AbstractSqliteQueryRunner
         }
 
         for (const check of table.checks) {
-            upQueries.push(await this.dropCheckConstraintMetadata(table, check))
+            const query = await this.dropCheckConstraintMetadata(table, check)
+            if (query) upQueries.push(query)
+
             downQueries.push(
                 await this.insertCheckConstraintMetadata(table, check),
             )
@@ -1066,10 +1068,13 @@ export abstract class AbstractSqliteQueryRunner
         await this.recreateTable(changedTable, table)
 
         for (const check of checkConstraints) {
-            await this.executeQueries(
-                await this.insertCheckConstraintMetadata(table, check),
-                await this.dropCheckConstraintMetadata(table, check),
-            )
+            const query = await this.dropCheckConstraintMetadata(table, check)
+            if (query) {
+                await this.executeQueries(
+                    await this.insertCheckConstraintMetadata(table, check),
+                    query,
+                )
+            }
         }
     }
 
@@ -1126,10 +1131,13 @@ export abstract class AbstractSqliteQueryRunner
         await this.recreateTable(changedTable, table)
 
         for (const check of checkConstraints) {
-            await this.executeQueries(
-                await this.dropCheckConstraintMetadata(table, check),
-                await this.insertCheckConstraintMetadata(table, check),
-            )
+            const query = await this.dropCheckConstraintMetadata(table, check)
+            if (query) {
+                await this.executeQueries(
+                    query,
+                    await this.insertCheckConstraintMetadata(table, check),
+                )
+            }
         }
     }
 
