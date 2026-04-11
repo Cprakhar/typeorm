@@ -22,6 +22,7 @@ import type { CteCapabilities } from "../types/CteCapabilities"
 import type { DataTypeDefaults } from "../types/DataTypeDefaults"
 import type { MappedColumnTypes } from "../types/MappedColumnTypes"
 import type { ReplicationMode } from "../types/ReplicationMode"
+import type { IsolationLevel } from "../types/IsolationLevel"
 import type { UpsertType } from "../types/UpsertType"
 import type { MongoDataSourceOptions } from "./MongoDataSourceOptions"
 import { MongoQueryRunner } from "./MongoQueryRunner"
@@ -30,6 +31,15 @@ import { MongoQueryRunner } from "./MongoQueryRunner"
  * Organizes communication with MongoDB.
  */
 export class MongoDriver implements Driver {
+    // -------------------------------------------------------------------------
+    // Static Properties
+    // -------------------------------------------------------------------------
+
+    /**
+     * Transaction isolation levels supported by this driver.
+     */
+    static readonly supportedIsolationLevels: IsolationLevel[] = []
+
     // -------------------------------------------------------------------------
     // Public Properties
     // -------------------------------------------------------------------------
@@ -50,7 +60,7 @@ export class MongoDriver implements Driver {
     // -------------------------------------------------------------------------
 
     /**
-     * Connection options.
+     * DataSource options.
      */
     options: MongoDataSourceOptions
 
@@ -169,8 +179,6 @@ export class MongoDriver implements Driver {
         "family",
         "forceServerObjectId",
         "ignoreUndefined",
-        "keepAlive",
-        "keepAliveInitialDelay",
         "localThresholdMS",
         "maxStalenessSeconds",
         "minPoolSize",
@@ -188,21 +196,12 @@ export class MongoDriver implements Driver {
         "retryWrites",
         "serializeFunctions",
         "socketTimeoutMS",
-        "ssl",
-        "sslCA",
-        "sslCRL",
-        "sslCert",
-        "sslKey",
-        "sslPass",
-        "sslValidate",
         "tls",
         "tlsAllowInvalidCertificates",
         "tlsCAFile",
         "tlsCertificateKeyFile",
         "tlsCertificateKeyFilePassword",
-        "w",
         "writeConcern",
-        "wtimeoutMS",
         // Proxy configuration for Socks5
         "proxyHost",
         "proxyPort",
@@ -214,11 +213,11 @@ export class MongoDriver implements Driver {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(protected connection: DataSource) {
-        this.options = connection.options as MongoDataSourceOptions
+    constructor(protected dataSource: DataSource) {
+        this.options = dataSource.options as MongoDataSourceOptions
 
         // validate options to make sure everything is correct and driver will be able to establish connection
-        this.validateOptions(connection.options)
+        this.validateOptions(dataSource.options)
 
         // load mongodb package
         this.loadDependencies()
@@ -243,9 +242,9 @@ export class MongoDriver implements Driver {
             this.buildConnectionOptions(options),
         )
 
-        this.queryRunner = new MongoQueryRunner(this.connection, client)
+        this.queryRunner = new MongoQueryRunner(this.dataSource, client)
         ObjectUtils.assign(this.queryRunner, {
-            manager: this.connection.manager,
+            manager: this.dataSource.manager,
         })
     }
 
@@ -270,11 +269,12 @@ export class MongoDriver implements Driver {
      * Creates a schema builder used to build and sync a schema.
      */
     createSchemaBuilder() {
-        return new MongoSchemaBuilder(this.connection)
+        return new MongoSchemaBuilder(this.dataSource)
     }
 
     /**
      * Creates a query runner used to execute database queries.
+     *
      * @param mode
      */
     createQueryRunner(mode: ReplicationMode) {
@@ -284,14 +284,13 @@ export class MongoDriver implements Driver {
     /**
      * Replaces parameters in the given sql with special escaping character
      * and an array of parameter names to be passed to a query.
+     *
      * @param sql
      * @param parameters
-     * @param nativeParameters
      */
     escapeQueryWithParameters(
         sql: string,
         parameters: ObjectLiteral,
-        nativeParameters: ObjectLiteral,
     ): [string, any[]] {
         throw new TypeORMError(
             `This operation is not supported by Mongodb driver.`,
@@ -300,6 +299,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Escapes a column name.
+     *
      * @param columnName
      */
     escape(columnName: string): string {
@@ -309,6 +309,7 @@ export class MongoDriver implements Driver {
     /**
      * Build full table name with database name, schema name and table name.
      * E.g. myDB.mySchema.myTable
+     *
      * @param tableName
      * @param schema
      * @param database
@@ -323,6 +324,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Parse a target table name or other types and return a normalized table definition.
+     *
      * @param target
      */
     parseTableName(
@@ -353,6 +355,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Prepares given value to a value to be persisted, based on its column type and metadata.
+     *
      * @param value
      * @param columnMetadata
      */
@@ -367,6 +370,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Prepares given value to a value to be persisted, based on its column type or metadata.
+     *
      * @param value
      * @param columnMetadata
      */
@@ -381,6 +385,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Creates a database type from a given column metadata.
+     *
      * @param column
      * @param column.type
      * @param column.length
@@ -400,6 +405,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Normalizes "default" value of the column.
+     *
      * @param columnMetadata
      */
     normalizeDefault(columnMetadata: ColumnMetadata): string | undefined {
@@ -410,6 +416,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Normalizes "isUnique" value of the column.
+     *
      * @param column
      */
     normalizeIsUnique(column: ColumnMetadata): boolean {
@@ -420,6 +427,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Calculates column length taking into account the default length values.
+     *
      * @param column
      */
     getColumnLength(column: ColumnMetadata): string {
@@ -430,6 +438,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Normalizes "default" value of the column.
+     *
      * @param column
      */
     createFullType(column: TableColumn): string {
@@ -458,6 +467,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Creates generated map of values generated or returned by database after INSERT query.
+     *
      * @param metadata
      * @param insertedId
      */
@@ -468,6 +478,7 @@ export class MongoDriver implements Driver {
     /**
      * Differentiate columns of this table and columns from the given column metadatas columns
      * and returns only changed.
+     *
      * @param tableColumns
      * @param columnMetadatas
      */
@@ -503,6 +514,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Creates an escaped parameter.
+     *
      * @param parameterName
      * @param index
      */
@@ -516,6 +528,7 @@ export class MongoDriver implements Driver {
 
     /**
      * Validate driver options to make sure everything is correct and driver will be able to establish connection.
+     *
      * @param options
      */
     protected validateOptions(options: DataSourceOptions) {
@@ -531,7 +544,7 @@ export class MongoDriver implements Driver {
      */
     protected loadDependencies(): any {
         try {
-            const mongodb = this.options.driver || PlatformTools.load("mongodb")
+            const mongodb = this.options.driver ?? PlatformTools.load("mongodb")
             this.mongodb = mongodb
         } catch (e) {
             throw new DriverPackageNotInstalledError("MongoDB", "mongodb")
@@ -551,19 +564,18 @@ export class MongoDriver implements Driver {
                 : ""
 
         const portUrlPart =
-            schemaUrlPart === "mongodb+srv" ? "" : `:${options.port || "27017"}`
+            schemaUrlPart === "mongodb+srv" ? "" : `:${options.port ?? "27017"}`
 
         let connectionString: string
         if (options.replicaSet) {
             connectionString = `${schemaUrlPart}://${credentialsUrlPart}${
-                options.hostReplicaSet ||
-                options.host + portUrlPart ||
-                "127.0.0.1" + portUrlPart
-            }/${options.database || ""}`
+                options.hostReplicaSet ??
+                `${options.host ?? "127.0.0.1"}${portUrlPart}`
+            }/${options.database ?? ""}`
         } else {
             connectionString = `${schemaUrlPart}://${credentialsUrlPart}${
-                options.host || "127.0.0.1"
-            }${portUrlPart}/${options.database || ""}`
+                options.host ?? "127.0.0.1"
+            }${portUrlPart}/${options.database ?? ""}`
         }
 
         return connectionString
