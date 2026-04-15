@@ -113,6 +113,16 @@ When strict mode is enabled, TypeORM will:
     - BLOB → `blob`
     - Other types → `any`
 
+`any` type behavior in strict tables:
+
+- `any` can be used only when entity is marked with `strict: true`.
+- Primitive values are stored using native SQLite storage classes.
+    - `number`, `string`, `bigint`, and `Uint8Array` values are persisted as-is.
+    - `boolean` values are persisted as `0` or `1`.
+- Complex values (`object` and `array`) are persisted as JSON text.
+- On hydration, JSON text representing objects/arrays (and JSON-quoted strings) is parsed back to JavaScript values.
+- Numeric values like `0` and `1` remain numbers for `any` columns.
+
 Benefits of strict tables:
 
 - **Type safety**: Ensures data stored matches the declared column type
