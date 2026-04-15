@@ -14,6 +14,7 @@ import { ApplyValueTransformers } from "../../util/ApplyValueTransformers"
 import { DateUtils } from "../../util/DateUtils"
 import { InstanceChecker } from "../../util/InstanceChecker"
 import { OrmUtils } from "../../util/OrmUtils"
+import { isUint8Array } from "../../util/Uint8ArrayUtils"
 import type { Driver } from "../Driver"
 import { DriverUtils } from "../DriverUtils"
 import type { ColumnType } from "../types/ColumnTypes"
@@ -390,6 +391,19 @@ export abstract class AbstractSqliteDriver implements Driver {
         } else if (columnMetadata.type === "simple-enum") {
             return DateUtils.simpleEnumToString(value)
         } else if (columnMetadata.type === "any") {
+            if (typeof value === "boolean") {
+                return value === true ? 1 : 0
+            }
+
+            if (
+                typeof value === "number" ||
+                typeof value === "string" ||
+                typeof value === "bigint" ||
+                isUint8Array(value)
+            ) {
+                return value
+            }
+
             return DateUtils.simpleJsonToString(value)
         }
 
@@ -458,10 +472,22 @@ export abstract class AbstractSqliteDriver implements Driver {
         } else if (
             columnMetadata.type === "json" ||
             columnMetadata.type === "jsonb" ||
-            columnMetadata.type === "simple-json" ||
-            columnMetadata.type === "any"
+            columnMetadata.type === "simple-json"
         ) {
             value = DateUtils.stringToSimpleJson(value)
+        } else if (columnMetadata.type === "any") {
+            if (
+                typeof value === "string" &&
+                (value.startsWith("{") ||
+                    value.startsWith("[") ||
+                    value.startsWith('"'))
+            ) {
+                try {
+                    value = DateUtils.stringToSimpleJson(value)
+                } catch {
+                    // Keep raw string if not valid JSON.
+                }
+            }
         } else if (columnMetadata.type === "simple-array") {
             value = DateUtils.stringToSimpleArray(value)
         } else if (columnMetadata.type === "simple-enum") {

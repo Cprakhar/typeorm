@@ -43,7 +43,7 @@ export class StrictUser {
     createdAt: Date
 
     @Column({ type: "blob", nullable: true })
-    data: Buffer
+    data: Uint8Array
 
     @Column({ type: "any", nullable: true })
     anyField: any

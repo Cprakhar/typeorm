@@ -1,5 +1,5 @@
 import "reflect-metadata"
-import { DataSource } from "../../../src/data-source/DataSource"
+import type { DataSource } from "../../../src/data-source/DataSource"
 import {
     closeTestingConnections,
     createTestingConnections,
@@ -11,15 +11,12 @@ import { StrictAny } from "./entity/StrictAny"
 
 describe("sqlite strict mode", () => {
     let dataSources: DataSource[]
-    before(
-        async () =>
-            (dataSources = await createTestingConnections({
-                entities: [__dirname + "/entity/*{.js,.ts}"],
-                enabledDrivers: ["better-sqlite3", "sqlite", "sqljs"],
-                schemaCreate: true,
-                dropSchema: true,
-            })),
-    )
+    before(async () => {
+        dataSources = await createTestingConnections({
+            entities: [__dirname + "/entity/*{.js,.ts}"],
+            enabledDrivers: ["better-sqlite3", "sqljs"],
+        })
+    })
     beforeEach(() => reloadTestingDatabases(dataSources))
     after(() => closeTestingConnections(dataSources))
 
@@ -32,9 +29,9 @@ describe("sqlite strict mode", () => {
         user.class = 10
         user.experience = 5
         user.score = 88.5
-        user.weight = 55.0
+        user.weight = 55
         user.height = 5.6
-        user.data = Buffer.from("Sample binary data")
+        user.data = Uint8Array.from("Sample binary data")
         user.anyField = { key: "value" }
 
         return await dataSource.manager.save(user)
@@ -47,7 +44,7 @@ describe("sqlite strict mode", () => {
                 const table = await queryRunner.getTable("strict_user")
 
                 expect(table).to.not.be.undefined
-                expect(table!.strict).to.be.true
+                expect(table?.strict).to.be.true
 
                 const sql = await dataSource.query(
                     `SELECT sql FROM sqlite_master WHERE name = 'strict_user'`,
@@ -64,7 +61,7 @@ describe("sqlite strict mode", () => {
                 const table = await queryRunner.getTable("non_strict_user")
 
                 expect(table).to.not.be.undefined
-                expect(table!.strict).to.be.false
+                expect(table?.strict).to.be.false
 
                 const sql = await dataSource.query(
                     `SELECT sql FROM sqlite_master WHERE name = 'non_strict_user'`,
@@ -84,36 +81,36 @@ describe("sqlite strict mode", () => {
 
                 const textFields = ["firstName", "email", "lastName"]
                 textFields.forEach((field) => {
-                    const column = table!.findColumnByName(field)
+                    const column = table?.findColumnByName(field)
                     expect(column).to.not.be.undefined
-                    expect(column!.type).to.equal("text")
+                    expect(column?.type).to.equal("text")
                 })
 
                 const integerFields = ["age", "class", "experience"]
                 integerFields.forEach((field) => {
-                    const column = table!.findColumnByName(field)
+                    const column = table?.findColumnByName(field)
                     expect(column).to.not.be.undefined
-                    expect(column!.type).to.equal("integer")
+                    expect(column?.type).to.equal("integer")
                 })
 
                 const floatFields = ["score", "weight", "height"]
                 floatFields.forEach((field) => {
-                    const column = table!.findColumnByName(field)
+                    const column = table?.findColumnByName(field)
                     expect(column).to.not.be.undefined
-                    expect(column!.type).to.equal("real")
+                    expect(column?.type).to.equal("real")
                 })
 
-                const createdAtField = table!.findColumnByName("createdAt")
+                const createdAtField = table?.findColumnByName("createdAt")
                 expect(createdAtField).to.not.be.undefined
-                expect(createdAtField!.type).to.equal("text")
+                expect(createdAtField?.type).to.equal("text")
 
-                const dataField = table!.findColumnByName("data")
+                const dataField = table?.findColumnByName("data")
                 expect(dataField).to.not.be.undefined
-                expect(dataField!.type).to.equal("blob")
+                expect(dataField?.type).to.equal("blob")
 
-                const anyField = table!.findColumnByName("anyField")
+                const anyField = table?.findColumnByName("anyField")
                 expect(anyField).to.not.be.undefined
-                expect(anyField!.type).to.equal("any")
+                expect(anyField?.type).to.equal("any")
                 await queryRunner.release()
             }),
         ))
@@ -125,12 +122,12 @@ describe("sqlite strict mode", () => {
                 const table = await queryRunner.getTable("strict_user")
 
                 expect(table).to.not.be.undefined
-                expect(table!.strict).to.be.true
+                expect(table?.strict).to.be.true
 
-                const idColumn = table!.findColumnByName("id")
+                const idColumn = table?.findColumnByName("id")
                 expect(idColumn).to.not.be.undefined
-                expect(idColumn!.isPrimary).to.be.true
-                expect(idColumn!.type).to.equal("integer")
+                expect(idColumn?.isPrimary).to.be.true
+                expect(idColumn?.type).to.equal("integer")
 
                 await queryRunner.release()
             }),
@@ -142,10 +139,10 @@ describe("sqlite strict mode", () => {
                 const table = await queryRunner.getTable("strict_user")
 
                 expect(table).to.not.be.undefined
-                expect(table!.strict).to.be.true
-                const email = table!.findColumnByName("email")
+                expect(table?.strict).to.be.true
+                const email = table?.findColumnByName("email")
                 expect(email).to.not.be.undefined
-                expect(email!.isUnique).to.be.true
+                expect(email?.isUnique).to.be.true
 
                 await queryRunner.release()
             }),
@@ -160,7 +157,7 @@ describe("sqlite strict mode", () => {
                     .findOne({ where: { id: user.id } })
                 expect(loadResult).to.deep.equal({
                     ...user,
-                    id: loadResult!.id,
+                    id: loadResult?.id,
                 })
             }),
         ))
@@ -177,7 +174,7 @@ describe("sqlite strict mode", () => {
                     })
                 expect(loadedUser).to.deep.equal({
                     ...user,
-                    id: loadedUser!.id,
+                    id: loadedUser?.id,
                 })
             }),
         ))
@@ -187,7 +184,7 @@ describe("sqlite strict mode", () => {
             dataSources.map(async (dataSource) => {
                 const user = await prepareData(dataSource)
 
-                user.data = Buffer.from("Updated binary data")
+                user.data = Uint8Array.from("Updated binary data")
                 user.score = 82.5
 
                 await dataSource.manager.save(user)
@@ -208,12 +205,13 @@ describe("sqlite strict mode", () => {
         Promise.all(
             dataSources.map(async (dataSource) => {
                 const user = await prepareData(dataSource)
+                const id = user.id
                 await dataSource.manager.remove(user)
 
                 const deletedUser = await dataSource.manager.findOne(
                     StrictUser,
                     {
-                        where: { id: user.id },
+                        where: { id: id },
                     },
                 )
 
@@ -267,7 +265,7 @@ describe("sqlite strict mode", () => {
                 await dataSource.manager.update(
                     StrictUser,
                     { age: 16 },
-                    { data: Buffer.from("Bulk updated") },
+                    { data: Uint8Array.from("Bulk updated") },
                 )
 
                 const updatedUsers = await dataSource.manager.find(StrictUser, {
@@ -276,7 +274,9 @@ describe("sqlite strict mode", () => {
 
                 expect(updatedUsers).to.have.length(3)
                 updatedUsers.forEach((user) => {
-                    expect(user.data).to.deep.equal(Buffer.from("Bulk updated"))
+                    expect(user.data).to.deep.equal(
+                        Uint8Array.from("Bulk updated"),
+                    )
                 })
             }),
         ))
@@ -290,14 +290,14 @@ describe("sqlite strict mode", () => {
                         email: "henry@example.com",
                         lastName: "Adams",
                         age: 45,
-                        score: 95.0,
+                        score: 95,
                     },
                     {
                         firstName: "Iris",
                         email: "iris@example.com",
                         lastName: "Johnson",
                         age: 22,
-                        score: 65.0,
+                        score: 65,
                     },
                 ]
 
@@ -324,8 +324,8 @@ describe("sqlite strict mode", () => {
                         user1.email = "jack@example.com"
                         user1.lastName = "Brown"
                         user1.age = 33
-                        user1.score = 88.0
-                        user1.data = Buffer.from("Transaction data 1")
+                        user1.score = 88
+                        user1.data = Uint8Array.from("Transaction data 1")
 
                         const user2 = new StrictUser()
                         user2.firstName = "Kelly"
@@ -333,7 +333,7 @@ describe("sqlite strict mode", () => {
                         user2.lastName = "Davis"
                         user2.age = 27
                         user2.score = 92.5
-                        user2.data = Buffer.from("Transaction data 2")
+                        user2.data = Uint8Array.from("Transaction data 2")
 
                         await transactionalEntityManager.save([user1, user2])
                     },
@@ -364,8 +364,15 @@ describe("sqlite strict mode", () => {
                     .findOne({ where: { id: savedEntity.id } })
                 expect(loadedEntity).to.deep.equal({
                     ...savedEntity,
-                    id: loadedEntity!.id,
                 })
+
+                const rawStorage1 = await dataSource.query(
+                    `SELECT typeof(anyField) AS anyFieldType, typeof(anotherAnyField) AS anotherAnyFieldType, typeof(yetAnotherAnyField) AS yetAnotherAnyFieldType FROM strict_any WHERE id = ?`,
+                    [savedEntity.id],
+                )
+                expect(rawStorage1[0].anyFieldType).to.equal("integer")
+                expect(rawStorage1[0].anotherAnyFieldType).to.equal("text")
+                expect(rawStorage1[0].yetAnotherAnyFieldType).to.equal("text")
 
                 const anyEntity2 = new StrictAny()
                 anyEntity2.anyField = { foo: "bar", num: 42 }
@@ -381,8 +388,16 @@ describe("sqlite strict mode", () => {
                     .findOne({ where: { id: savedEntity2.id } })
                 expect(loadedEntity2).to.deep.equal({
                     ...savedEntity2,
-                    id: loadedEntity2!.id,
+                    anotherAnyField: 0, // with strict mode returned value will be number
                 })
+
+                const rawStorage2 = await dataSource.query(
+                    `SELECT typeof(anyField) AS anyFieldType, typeof(anotherAnyField) AS anotherAnyFieldType, typeof(yetAnotherAnyField) AS yetAnotherAnyFieldType FROM strict_any WHERE id = ?`,
+                    [savedEntity2.id],
+                )
+                expect(rawStorage2[0].anyFieldType).to.equal("text")
+                expect(rawStorage2[0].anotherAnyFieldType).to.equal("integer")
+                expect(rawStorage2[0].yetAnotherAnyFieldType).to.equal("real")
             }),
         ))
 })

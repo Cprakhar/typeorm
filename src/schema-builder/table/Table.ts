@@ -151,7 +151,7 @@ export class Table {
 
             if (options.withoutRowid) this.withoutRowid = options.withoutRowid
 
-            this.strict = options.strict === true ? true : false
+            this.strict = options.strict === true
 
             this.engine = options.engine
 

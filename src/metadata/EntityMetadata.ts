@@ -1085,7 +1085,7 @@ export class EntityMetadata {
         this.expression = this.tableMetadataArgs.expression
         this.withoutRowid =
             this.tableMetadataArgs.withoutRowid === true ? true : false
-        this.strict = this.tableMetadataArgs.strict === true ? true : false
+        this.strict = this.tableMetadataArgs.strict === true
 
         this.tablePath = this.dataSource.driver.buildTableName(
             this.tableName,
@@ -1116,7 +1116,7 @@ export class EntityMetadata {
      * @param column
      */
     registerColumn(column: ColumnMetadata) {
-        if (this.ownColumns.indexOf(column) !== -1) return
+        if (this.ownColumns.includes(column)) return
 
         this.ownColumns.push(column)
         this.columns = this.embeddeds.reduce(
