@@ -28,3 +28,9 @@ const nowaitUsers = await repository.find({
 const preserved = await repository.find({
     lock: { mode: "pessimistic_write", onLocked: "nowait" },
 })
+
+// Quoted `"mode"` and `"onLocked"` keys should match the same way identifiers do
+// prettier-ignore
+const quotedKeys = await repository.find({
+    "lock": { "mode": "pessimistic_write", "onLocked": "skip_locked" },
+})
