@@ -1310,13 +1310,10 @@ export class MongoEntityManager extends EntityManager {
         cursor: FindCursor<Entity> | AggregationCursor<Entity>,
     ) {
         const transformer = new DocumentToEntityTransformer()
-        const originalToArray = cursor.toArray.bind(cursor)
         const originalNext = cursor.next.bind(cursor)
 
         cursor.toArray = () =>
             this.toArray(
-                cursor,
-                originalToArray,
                 originalNext,
                 transformer,
                 metadata,
@@ -1500,22 +1497,20 @@ export class MongoEntityManager extends EntityManager {
     }
 
     private async toArray<Entity>(
-        cursor: FindCursor<Entity> | AggregationCursor<Entity>,
-        originalToArray: () => Promise<Entity[]>,
         originalNext: () => Promise<Entity | null>,
         transformer: DocumentToEntityTransformer,
         metadata: EntityMetadata,
         queryRunner: MongoQueryRunner,
     ): Promise<Entity[]> {
-        const patchedNext = cursor.next.bind(cursor)
-        cursor.next = originalNext
+        const documents: Entity[] = []
+        let doc: Entity | null
 
-        let documents: Entity[]
-        try {
-            documents = await originalToArray()
-        } finally {
-            cursor.next = patchedNext
-        }
+        do {
+            doc = await originalNext()
+            if (doc !== null) {
+                documents.push(doc)
+            }
+        } while (doc !== null)
 
         const entities = transformer
             .transformAll(documents as ObjectLiteral[], metadata)
