@@ -7,5 +7,8 @@ const dataSource = new DataSource({
         max: 10,
         requestTimeout: 5000,
         idleTimeout: 30000,
+        min: 0,
+        maxWaitingRequests: 0,
+        checkInterval: 0,
     },
 })
