@@ -8,9 +8,9 @@ import {
 import { Category } from "./entity/Category"
 import { Post } from "./entity/Post"
 import { IsolationLevels } from "../../../../src/driver/types/IsolationLevel"
-import { PostgresDriver } from "../../../../src/driver/postgres/PostgresDriver"
+import { CockroachDriver } from "../../../../src/driver/cockroachdb/CockroachDriver"
 
-const supportedLevels = PostgresDriver.supportedIsolationLevels
+const supportedLevels = CockroachDriver.supportedIsolationLevels
 const unsupportedLevels = IsolationLevels.filter(
     (level) => !supportedLevels.includes(level),
 )
@@ -26,13 +26,38 @@ const getCurrentTransactionLevelAndAssert = async (
     expect(actualIsolationLevel).to.equal(expectedIsolationLevel.toLowerCase())
 }
 
-describe("transaction > isolation level > postgres", () => {
+const getExpectedIsolationForDefaultSettings = (
+    requestedIsolationLevel: string,
+) => {
+    if (requestedIsolationLevel === "READ UNCOMMITTED") {
+        return "READ COMMITTED"
+    }
+
+    return requestedIsolationLevel
+}
+
+const setIsolationClusterSettings = async (
+    dataSource: DataSource,
+    settings: {
+        readCommitted: boolean
+        repeatableRead: boolean
+    },
+) => {
+    await dataSource.query(
+        `SET CLUSTER SETTING sql.txn.read_committed_isolation.enabled = '${settings.readCommitted}'`,
+    )
+    await dataSource.query(
+        `SET CLUSTER SETTING sql.txn.repeatable_read_isolation.enabled = '${settings.repeatableRead}'`,
+    )
+}
+
+describe("transaction > isolation level > cockroachdb", () => {
     describe("defined for transaction", () => {
         let dataSources: DataSource[]
         before(async () => {
             dataSources = await createTestingConnections({
                 entities: [__dirname + "/entity/*{.js,.ts}"],
-                enabledDrivers: ["postgres"],
+                enabledDrivers: ["cockroachdb"],
             })
         })
         beforeEach(() => reloadTestingDatabases(dataSources))
@@ -51,7 +76,9 @@ describe("transaction > isolation level > postgres", () => {
                                 async (entityManager) => {
                                     await getCurrentTransactionLevelAndAssert(
                                         entityManager,
-                                        isolationLevel,
+                                        getExpectedIsolationForDefaultSettings(
+                                            isolationLevel,
+                                        ),
                                     )
 
                                     const post = new Post()
@@ -118,7 +145,7 @@ describe("transaction > isolation level > postgres", () => {
                     // DDL failures under weak isolation
                     const setup = await createTestingConnections({
                         entities: [__dirname + "/entity/*{.js,.ts}"],
-                        enabledDrivers: ["postgres"],
+                        enabledDrivers: ["cockroachdb"],
                         schemaCreate: true,
                         dropSchema: true,
                     })
@@ -126,7 +153,7 @@ describe("transaction > isolation level > postgres", () => {
 
                     dataSources = await createTestingConnections({
                         entities: [__dirname + "/entity/*{.js,.ts}"],
-                        enabledDrivers: ["postgres"],
+                        enabledDrivers: ["cockroachdb"],
                         driverSpecific: {
                             isolationLevel,
                         },
@@ -141,13 +168,123 @@ describe("transaction > isolation level > postgres", () => {
                                 async (entityManager) => {
                                     await getCurrentTransactionLevelAndAssert(
                                         entityManager,
-                                        isolationLevel,
+                                        getExpectedIsolationForDefaultSettings(
+                                            isolationLevel,
+                                        ),
                                     )
                                 },
                             )
                         }),
                     ))
             })
+        }
+    })
+
+    describe("fallback behavior", () => {
+        let dataSources: DataSource[]
+
+        before(async () => {
+            dataSources = await createTestingConnections({
+                entities: [__dirname + "/entity/*{.js,.ts}"],
+                enabledDrivers: ["cockroachdb"],
+            })
+        })
+
+        beforeEach(() => reloadTestingDatabases(dataSources))
+        after(() => closeTestingConnections(dataSources))
+
+        const fallbackCases: Array<{
+            name: string
+            requestedIsolationLevel:
+                | "READ COMMITTED"
+                | "READ UNCOMMITTED"
+                | "REPEATABLE READ"
+            settings: {
+                readCommitted: boolean
+                repeatableRead: boolean
+            }
+            expectedIsolationLevel:
+                | "READ COMMITTED"
+                | "REPEATABLE READ"
+                | "SERIALIZABLE"
+        }> = [
+            {
+                name: "READ COMMITTED -> SERIALIZABLE when read committed and repeatable read settings are disabled",
+                requestedIsolationLevel: "READ COMMITTED",
+                settings: {
+                    readCommitted: false,
+                    repeatableRead: false,
+                },
+                expectedIsolationLevel: "SERIALIZABLE",
+            },
+            {
+                name: "READ COMMITTED -> REPEATABLE READ when read committed setting is disabled and repeatable read setting is enabled",
+                requestedIsolationLevel: "READ COMMITTED",
+                settings: {
+                    readCommitted: false,
+                    repeatableRead: true,
+                },
+                expectedIsolationLevel: "REPEATABLE READ",
+            },
+            {
+                name: "READ UNCOMMITTED -> SERIALIZABLE when read committed and repeatable read settings are disabled",
+                requestedIsolationLevel: "READ UNCOMMITTED",
+                settings: {
+                    readCommitted: false,
+                    repeatableRead: false,
+                },
+                expectedIsolationLevel: "SERIALIZABLE",
+            },
+            {
+                name: "READ UNCOMMITTED -> READ COMMITTED when read committed setting is enabled",
+                requestedIsolationLevel: "READ UNCOMMITTED",
+                settings: {
+                    readCommitted: true,
+                    repeatableRead: true,
+                },
+                expectedIsolationLevel: "READ COMMITTED",
+            },
+            {
+                name: "READ UNCOMMITTED -> REPEATABLE READ when read committed setting is disabled and repeatable read setting is enabled",
+                requestedIsolationLevel: "READ UNCOMMITTED",
+                settings: {
+                    readCommitted: false,
+                    repeatableRead: true,
+                },
+                expectedIsolationLevel: "REPEATABLE READ",
+            },
+            {
+                name: "REPEATABLE READ -> SERIALIZABLE when repeatable read setting is disabled",
+                requestedIsolationLevel: "REPEATABLE READ",
+                settings: {
+                    readCommitted: true,
+                    repeatableRead: false,
+                },
+                expectedIsolationLevel: "SERIALIZABLE",
+            },
+        ]
+
+        for (const testCase of fallbackCases) {
+            it(testCase.name, () =>
+                Promise.all(
+                    dataSources.map(async (dataSource) => {
+                        await setIsolationClusterSettings(
+                            dataSource,
+                            testCase.settings,
+                        )
+
+                        await dataSource.manager.transaction(
+                            testCase.requestedIsolationLevel,
+                            async (entityManager) => {
+                                await getCurrentTransactionLevelAndAssert(
+                                    entityManager,
+                                    testCase.expectedIsolationLevel,
+                                )
+                            },
+                        )
+                    }),
+                ),
+            )
         }
     })
 })
