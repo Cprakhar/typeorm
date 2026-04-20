@@ -61,7 +61,7 @@ Isolation level implementations are _not_ agnostic across all databases. Each dr
 <DatabaseTab value="cockroachdb">
 
 - `READ COMMITTED` — requires the cluster setting `sql.txn.read_committed_isolation.enabled`, which is enabled by default in recent versions
-- `REPEATABLE READ` - requires the cluster setting `sql.txn.repeatable_read_isolation.enabled`, which is disabled by default (introduced in v24.3.0)
+- `REPEATABLE READ` — requires the cluster setting `sql.txn.repeatable_read_isolation.enabled`, which is disabled by default (introduced in v24.3.0)
 - `SERIALIZABLE` (default)
 
 CockroachDB maps weaker SQL isolation requests to stronger levels. The fallback behavior depends on the corresponding cluster settings. For example, when you request `READ UNCOMMITTED`, `READ COMMITTED` or `REPEATABLE READ` via SQL (e.g. `BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED`), CockroachDB accepts the syntax and may run the transaction at a stricter level instead:

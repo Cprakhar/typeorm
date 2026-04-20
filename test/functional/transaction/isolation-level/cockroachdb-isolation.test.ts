@@ -191,7 +191,17 @@ describe("transaction > isolation level > cockroachdb", () => {
         })
 
         beforeEach(() => reloadTestingDatabases(dataSources))
-        after(() => closeTestingConnections(dataSources))
+        after(async () => {
+            await Promise.all(
+                dataSources.map((dataSource) =>
+                    setIsolationClusterSettings(dataSource, {
+                        readCommitted: true,
+                        repeatableRead: true,
+                    }),
+                ),
+            )
+            await closeTestingConnections(dataSources)
+        })
 
         const fallbackCases: Array<{
             name: string
