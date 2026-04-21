@@ -3185,24 +3185,27 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                                 }
                             }
 
-                            // We cannot relay on GENERATED_ALWAYS_AS, because it is formatted different.
-                            const asExpressionQuery =
-                                this.selectTypeormMetadataSql({
-                                    schema: dbTable["SCHEMA_NAME"],
-                                    table: dbTable["TABLE_NAME"],
-                                    type: MetadataTableType.GENERATED_COLUMN,
-                                    name: tableColumn.name,
-                                })
+                            if (dbColumn["GENERATED_ALWAYS_AS"]) {
+                                // We cannot relay on GENERATED_ALWAYS_AS, because it is formatted different.
+                                const asExpressionQuery =
+                                    this.selectTypeormMetadataSql({
+                                        schema: dbTable["SCHEMA_NAME"],
+                                        table: dbTable["TABLE_NAME"],
+                                        type: MetadataTableType.GENERATED_COLUMN,
+                                        name: tableColumn.name,
+                                    })
 
-                            const results = await this.query(
-                                asExpressionQuery.query,
-                                asExpressionQuery.parameters,
-                            )
-                            if (results[0]?.value) {
-                                tableColumn.asExpression = results[0].value
-                            } else {
-                                tableColumn.asExpression =
-                                    dbColumn["GENERATED_ALWAYS_AS"] ?? undefined
+                                const results = await this.query(
+                                    asExpressionQuery.query,
+                                    asExpressionQuery.parameters,
+                                )
+                                if (results[0]?.value) {
+                                    tableColumn.asExpression = results[0].value
+                                } else {
+                                    tableColumn.asExpression =
+                                        dbColumn["GENERATED_ALWAYS_AS"] ??
+                                        undefined
+                                }
                             }
 
                             if (dbColumn["COMMENTS"]) {
