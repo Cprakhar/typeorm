@@ -2851,6 +2851,8 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
      * @param tableNames
      */
     protected async loadTables(tableNames?: string[]): Promise<Table[]> {
+        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
+
         if (tableNames?.length === 0) {
             return []
         }
@@ -2958,16 +2960,19 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                     schema,
                 )
 
-                const generatedColumnSql = this.selectTypeormMetadataSql({
-                    schema: dbTable["SCHEMA_NAME"],
-                    table: dbTable["TABLE_NAME"],
-                    type: MetadataTableType.GENERATED_COLUMN,
-                })
+                let generatedColumns: ObjectLiteral[] = []
+                if (hasTable) {
+                    const generatedColumnSql = this.selectTypeormMetadataSql({
+                        schema: dbTable["SCHEMA_NAME"],
+                        table: dbTable["TABLE_NAME"],
+                        type: MetadataTableType.GENERATED_COLUMN,
+                    })
 
-                const generatedColumns: ObjectLiteral[] = await this.query(
-                    generatedColumnSql.query,
-                    generatedColumnSql.parameters,
-                )
+                    generatedColumns = await this.query(
+                        generatedColumnSql.query,
+                        generatedColumnSql.parameters,
+                    )
+                }
 
                 // create columns from the loaded columns
                 table.columns = dbColumns
