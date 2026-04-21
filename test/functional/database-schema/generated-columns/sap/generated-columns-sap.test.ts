@@ -242,6 +242,69 @@ describe("database schema > generated columns > sap", () => {
             }),
         ))
 
+    it("should rename generated column metadata row and revert rename", () =>
+        Promise.all(
+            dataSources.map(async (dataSource) => {
+                const queryRunner = dataSource.createQueryRunner()
+                try {
+                    let table = await queryRunner.getTable("post")
+                    await queryRunner.renameColumn(
+                        table!,
+                        "fullName",
+                        "fullNameRenamed",
+                    )
+
+                    table = await queryRunner.getTable("post")
+
+                    const oldColumn = table!.findColumnByName("fullName")
+                    expect(oldColumn).to.be.undefined
+
+                    const renamedColumn =
+                        table!.findColumnByName("fullNameRenamed")!
+                    renamedColumn.should.be.exist
+                    renamedColumn.asExpression!.should.be.equal(
+                        `"firstName" || ' ' || "lastName"`,
+                    )
+
+                    const oldMetadataRecords = await queryRunner.query(
+                        `SELECT * FROM "typeorm_metadata" WHERE "table" = 'post' AND "name" = 'fullName'`,
+                    )
+                    oldMetadataRecords.length.should.be.equal(0)
+
+                    const renamedMetadataRecords = await queryRunner.query(
+                        `SELECT * FROM "typeorm_metadata" WHERE "table" = 'post' AND "name" = 'fullNameRenamed'`,
+                    )
+                    renamedMetadataRecords.length.should.be.equal(1)
+
+                    // revert changes
+                    await queryRunner.executeMemoryDownSql()
+
+                    table = await queryRunner.getTable("post")
+
+                    const revertedColumn = table!.findColumnByName("fullName")!
+                    revertedColumn.should.be.exist
+                    revertedColumn.asExpression!.should.be.equal(
+                        `"firstName" || ' ' || "lastName"`,
+                    )
+                    expect(table!.findColumnByName("fullNameRenamed")).to.be
+                        .undefined
+
+                    const revertedMetadataRecords = await queryRunner.query(
+                        `SELECT * FROM "typeorm_metadata" WHERE "table" = 'post' AND "name" = 'fullName'`,
+                    )
+                    revertedMetadataRecords.length.should.be.equal(1)
+
+                    const revertedRenamedMetadataRecords =
+                        await queryRunner.query(
+                            `SELECT * FROM "typeorm_metadata" WHERE "table" = 'post' AND "name" = 'fullNameRenamed'`,
+                        )
+                    revertedRenamedMetadataRecords.length.should.be.equal(0)
+                } finally {
+                    await queryRunner.release()
+                }
+            }),
+        ))
+
     it("should remove data from 'typeorm_metadata' when table dropped", () =>
         Promise.all(
             dataSources.map(async (dataSource) => {
