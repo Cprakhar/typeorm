@@ -90,8 +90,8 @@ describe("database schema > generated columns > sap", () => {
                         asExpression: `"firstName" || ' ' || "lastName"`,
                     })
 
-                    let hashmd5 = new TableColumn({
-                        name: "hashmd5",
+                    let nameHash = new TableColumn({
+                        name: "nameHash",
                         type: "varbinary",
                         length: "32",
                         asExpression: `HASH_MD5(TO_BINARY("firstName"))`,
@@ -99,7 +99,7 @@ describe("database schema > generated columns > sap", () => {
 
                     await queryRunner.addColumn(table!, nameWithoutSpace)
                     await queryRunner.addColumn(table!, nameWithSpace)
-                    await queryRunner.addColumn(table!, hashmd5)
+                    await queryRunner.addColumn(table!, nameHash)
                     table = await queryRunner.getTable("post")
 
                     nameWithoutSpace =
@@ -115,9 +115,9 @@ describe("database schema > generated columns > sap", () => {
                         `"firstName" || ' ' || "lastName"`,
                     )
 
-                    hashmd5 = table!.findColumnByName("hashmd5")!
-                    hashmd5.should.be.exist
-                    hashmd5.asExpression!.should.be.equal(
+                    nameHash = table!.findColumnByName("nameHash")!
+                    nameHash.should.be.exist
+                    nameHash.asExpression!.should.be.equal(
                         `HASH_MD5(TO_BINARY("firstName"))`,
                     )
 
@@ -129,11 +129,11 @@ describe("database schema > generated columns > sap", () => {
                         .undefined
                     expect(table!.findColumnByName("nameWithSpace")).to.be
                         .undefined
-                    expect(table!.findColumnByName("hashmd5")).to.be.undefined
+                    expect(table!.findColumnByName("nameHash")).to.be.undefined
 
                     // check if generated column records removed from typeorm_metadata table
                     const metadataRecords = await queryRunner.query(
-                        `SELECT * FROM "typeorm_metadata" WHERE "table" = 'post' AND "name" IN ('nameWithoutSpace', 'nameWithSpace', 'hashmd5')`,
+                        `SELECT * FROM "typeorm_metadata" WHERE "table" = 'post' AND "name" IN ('nameWithoutSpace', 'nameWithSpace', 'nameHash')`,
                     )
                     metadataRecords.length.should.be.equal(0)
                 } finally {

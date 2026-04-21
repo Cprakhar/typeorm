@@ -441,14 +441,17 @@ export abstract class BaseQueryRunner implements AsyncDisposable {
         schema?: string
         table?: string
         type: MetadataTableType
-        name: string
+        name?: string
     }): Query {
         const qb = this.dataSource.createQueryBuilder()
         const selectQb = qb
             .select()
             .from(this.getTypeormMetadataTableName(), "t")
             .where(`${qb.escape("type")} = :type`, { type })
-            .andWhere(`${qb.escape("name")} = :name`, { name })
+
+        if (name) {
+            selectQb.andWhere(`${qb.escape("name")} = :name`, { name })
+        }
 
         if (database) {
             selectQb.andWhere(`${qb.escape("database")} = :database`, {
