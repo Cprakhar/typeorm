@@ -10,6 +10,7 @@ import {
     expandLocalNamesForImports,
     fileImportsFrom,
     forEachIdentifierParam,
+    getNamespaceLocalNames,
     getStringValue,
     getTypeReferenceRootName,
     isIdentifier,
@@ -86,12 +87,17 @@ const ensureDataSourceOptionsTypeImport = (
     })
     if (hasIt) return
 
-    // Prefer augmenting an existing `import type { ... } from "typeorm"`;
-    // else fall back to a new type-only import line.
+    // Prefer augmenting an existing `import type { ... } from "typeorm"`
+    // — but only when that declaration is a pure named-specifier form.
+    // Pushing an `ImportSpecifier` into a namespace or default-only import
+    // (`import type * as ns` / `import type D`) produces invalid TS.
     let augmented = false
     typeormImports.forEach((p) => {
         if (augmented) return
         if ((p.node as { importKind?: string }).importKind !== "type") return
+        const specifiers = p.node.specifiers ?? []
+        const onlyNamed = specifiers.every((s) => s.type === "ImportSpecifier")
+        if (!onlyNamed) return
         p.node.specifiers?.push(
             j.importSpecifier(j.identifier("DataSourceOptions")),
         )
@@ -185,10 +191,8 @@ const rewriteMetadataConstructors = (
         if (arg?.type !== "ObjectExpression") return
 
         const changed = isEntityMetadata
-            ? renameConnectionKeyToDataSource(
-                  arg as unknown as { properties: ASTNode[] },
-              )
-            : dropConnectionKey(arg as unknown as { properties: ASTNode[] })
+            ? renameConnectionKeyToDataSource(arg)
+            : dropConnectionKey(arg)
         if (changed) hasChanges = true
     })
     return hasChanges
@@ -462,15 +466,25 @@ export const connectionToDataSource = (file: FileInfo, api: API) => {
         ensureDataSourceOptionsTypeImport(root, j)
     }
 
-    // Re-export source paths (`export { X } from "typeorm/driver/..."`)
-    // follow the same deep-path rewrite rules as import sources so barrel
-    // files that re-export renamed modules end up pointing at the v1 path.
+    // Re-export source paths (`export { X } from "typeorm/driver/..."` and
+    // `export * from "typeorm/driver/..."`) follow the same deep-path rewrite
+    // rules as import sources so barrel files that re-export renamed modules
+    // end up pointing at the v1 path.
     root.find(j.ExportNamedDeclaration).forEach((exportPath) => {
         const source = exportPath.node.source?.value
         if (typeof source !== "string") return
         const rewritten = rewriteTypeormPath(source)
         if (rewritten !== source) {
             exportPath.node.source!.value = rewritten
+            hasChanges = true
+        }
+    })
+    root.find(j.ExportAllDeclaration).forEach((exportPath) => {
+        const source = exportPath.node.source.value
+        if (typeof source !== "string") return
+        const rewritten = rewriteTypeormPath(source)
+        if (rewritten !== source) {
+            exportPath.node.source.value = rewritten
             hasChanges = true
         }
     })
@@ -649,6 +663,11 @@ export const connectionToDataSource = (file: FileInfo, api: API) => {
         "typeorm",
         new Set(["Connection", "DataSource"]),
     )
+    // Namespace-import locals for "typeorm" — used to gate qualified type
+    // references (`typeorm.Repository<T>`) inside `getTypeReferenceRootName`
+    // so array-element lookups don't mistake `Foo.Repository[]` from another
+    // library for a TypeORM receiver.
+    const typeormNamespaceNames = getNamespaceLocalNames(root, j, "typeorm")
     const connectionVarNames = new Set<string>()
 
     root.find(j.VariableDeclarator).forEach((path) => {
@@ -1036,6 +1055,7 @@ export const connectionToDataSource = (file: FileInfo, api: API) => {
                 resolved =
                     getTypeReferenceRootName(
                         (inner as { elementType: ASTNode }).elementType,
+                        typeormNamespaceNames,
                     ) ?? null
                 return
             }
@@ -1050,7 +1070,11 @@ export const connectionToDataSource = (file: FileInfo, api: API) => {
                     }
                 ).typeParameters?.params
                 if (params && params.length > 0) {
-                    resolved = getTypeReferenceRootName(params[0]) ?? null
+                    resolved =
+                        getTypeReferenceRootName(
+                            params[0],
+                            typeormNamespaceNames,
+                        ) ?? null
                 }
             }
         })

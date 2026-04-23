@@ -235,9 +235,7 @@ const runOneTransform = async (
         )
         // Restore stdout first so worker warnings/stack traces that were
         // buffered during the run are printed against the real terminal
-        // instead of being re-captured by the interceptor. Guard the print
-        // in try/catch: a best-effort diagnostic must never mask the
-        // original transform error.
+        // instead of being re-captured by the interceptor.
         process.stdout.write = originalWrite
         try {
             printUnclassifiedOutput(
@@ -245,8 +243,24 @@ const runOneTransform = async (
                 interceptor.getSuppressedOutputCount(),
                 originalWrite,
             )
-        } catch {
-            // Swallow — the original `err` is what the user cares about.
+        } catch (printErr) {
+            // A failing diagnostic must never mask the original transform
+            // error. Leave a breadcrumb on stderr so the print failure is
+            // still visible, then fall through to rethrow `err`. The
+            // stderr write itself is also guarded — on EPIPE (e.g. the
+            // output is piped to `head` in CI) writing to stderr would
+            // throw and mask `err` just the same.
+            try {
+                process.stderr.write(
+                    `Warning: failed to print buffered worker output: ${
+                        printErr instanceof Error
+                            ? printErr.message
+                            : String(printErr)
+                    }\n`,
+                )
+            } catch {
+                // stderr is broken too — nothing more to do.
+            }
         }
         throw err
     } finally {
