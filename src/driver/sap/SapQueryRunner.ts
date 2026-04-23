@@ -2927,7 +2927,6 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
             const tablesCondition = tableNames
                 .map((tableName) => {
                     let [schema, name] = tableName.split(".")
-                    console.log("schema", schema, "name", name)
                     if (!name) {
                         name = schema
                         schema = this.driver.options.schema ?? currentSchema
