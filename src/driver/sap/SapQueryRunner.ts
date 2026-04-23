@@ -874,6 +874,28 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
             ),
         )
 
+        const generatedColumns = oldTable.columns.some(
+            (col) => col.asExpression,
+        )
+
+        if (generatedColumns) {
+            const updateQuery = this.updateTypeormMetadataSql({
+                schema: schemaName,
+                table: oldTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: newTableName },
+            })
+            const revertUpdateQuery = this.updateTypeormMetadataSql({
+                schema: schemaName,
+                table: newTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: oldTableName },
+            })
+
+            upQueries.push(updateQuery)
+            downQueries.push(revertUpdateQuery)
+        }
+
         // drop old FK's. Foreign keys must be dropped before the primary keys are dropped
         newTable.foreignKeys.forEach((foreignKey) => {
             upQueries.push(this.dropForeignKeySql(newTable, foreignKey))
@@ -1435,42 +1457,23 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                     const parsedTableName = this.driver.parseTableName(table)
                     parsedTableName.schema ??= await this.getCurrentSchema()
 
-                    const updateQuery = this.dataSource
-                        .createQueryBuilder()
-                        .update(this.getTypeormMetadataTableName())
-                        .set({ name: newColumn.name })
-                        .where(`"type" = :type`, {
-                            type: MetadataTableType.GENERATED_COLUMN,
-                        })
-                        .andWhere(`"name" = :name`, { name: oldColumn.name })
-                        .andWhere(`"schema" = :schema`, {
-                            schema: parsedTableName.schema,
-                        })
-                        .andWhere(`"table" = :table`, {
-                            table: parsedTableName.tableName,
-                        })
-                        .getQueryAndParameters()
+                    const updateQuery = this.updateTypeormMetadataSql({
+                        schema: parsedTableName.schema,
+                        table: parsedTableName.tableName,
+                        type: MetadataTableType.GENERATED_COLUMN,
+                        name: oldColumn.name,
+                        valueToSet: { name: newColumn.name },
+                    })
+                    const revertUpdateQuery = this.updateTypeormMetadataSql({
+                        schema: parsedTableName.schema,
+                        table: parsedTableName.tableName,
+                        type: MetadataTableType.GENERATED_COLUMN,
+                        name: newColumn.name,
+                        valueToSet: { name: oldColumn.name },
+                    })
 
-                    const revertUpdateQuery = this.dataSource
-                        .createQueryBuilder()
-                        .update(this.getTypeormMetadataTableName())
-                        .set({ name: oldColumn.name })
-                        .where(`"type" = :type`, {
-                            type: MetadataTableType.GENERATED_COLUMN,
-                        })
-                        .andWhere(`"name" = :name`, { name: newColumn.name })
-                        .andWhere(`"schema" = :schema`, {
-                            schema: parsedTableName.schema,
-                        })
-                        .andWhere(`"table" = :table`, {
-                            table: parsedTableName.tableName,
-                        })
-                        .getQueryAndParameters()
-
-                    upQueries.push(new Query(updateQuery[0], updateQuery[1]))
-                    downQueries.push(
-                        new Query(revertUpdateQuery[0], revertUpdateQuery[1]),
-                    )
+                    upQueries.push(updateQuery)
+                    downQueries.push(revertUpdateQuery)
                 }
 
                 // rename index constraints
