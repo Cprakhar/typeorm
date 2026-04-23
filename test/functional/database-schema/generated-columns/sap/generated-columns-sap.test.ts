@@ -11,13 +11,14 @@ import { Post } from "./entity/Post"
 
 describe("database schema > generated columns > sap", () => {
     let dataSources: DataSource[]
-    before(async () => {
+    before(async function () {
         dataSources = await createTestingConnections({
             entities: [__dirname + "/entity/*{.js,.ts}"],
             enabledDrivers: ["sap"],
             schemaCreate: true,
             dropSchema: true,
         })
+        if (!dataSources.length) this.skip()
     })
     beforeEach(() => reloadTestingDatabases(dataSources))
     after(() => closeTestingConnections(dataSources))
@@ -40,14 +41,14 @@ describe("database schema > generated columns > sap", () => {
                 const queryRunner = dataSource.createQueryRunner()
                 try {
                     const table = await queryRunner.getTable("post")
-                    const fullName = table!.findColumnByName("fullName")!
-                    const name = table!.findColumnByName("name")!
+                    const fullName = table?.findColumnByName("fullName")
+                    const name = table?.findColumnByName("name")
 
-                    fullName.asExpression!.should.be.equal(
+                    fullName?.asExpression?.should.be.equal(
                         `"firstName" || ' ' || "lastName"`,
                     )
 
-                    name.asExpression!.should.be.equal(
+                    name?.asExpression?.should.be.equal(
                         `"firstName" || "lastName"`,
                     )
 
@@ -61,8 +62,8 @@ describe("database schema > generated columns > sap", () => {
                     await repo.save(post)
 
                     const loadedPost = await repo.findOneBy({ id: post.id })
-                    loadedPost!.fullName.should.be.equal("Timber Saw")
-                    loadedPost!.name.should.be.equal("TimberSaw")
+                    loadedPost?.fullName?.should.be.equal("Timber Saw")
+                    loadedPost?.name?.should.be.equal("TimberSaw")
                 } finally {
                     await queryRunner.release()
                 }
@@ -76,48 +77,52 @@ describe("database schema > generated columns > sap", () => {
                 try {
                     let table = await queryRunner.getTable("post")
 
-                    let nameWithoutSpace = new TableColumn({
-                        name: "nameWithoutSpace",
-                        type: "varchar",
-                        length: "200",
-                        asExpression: `"firstName" || "lastName"`,
-                    })
+                    let nameWithoutSpace: TableColumn | undefined =
+                        new TableColumn({
+                            name: "nameWithoutSpace",
+                            type: "varchar",
+                            length: "200",
+                            asExpression: `"firstName" || "lastName"`,
+                        })
 
-                    let nameWithSpace = new TableColumn({
-                        name: "nameWithSpace",
-                        type: "varchar",
-                        length: "200",
-                        asExpression: `"firstName" || ' ' || "lastName"`,
-                    })
+                    let nameWithSpace: TableColumn | undefined =
+                        new TableColumn({
+                            name: "nameWithSpace",
+                            type: "varchar",
+                            length: "200",
+                            asExpression: `"firstName" || ' ' || "lastName"`,
+                        })
 
-                    let nameHash = new TableColumn({
+                    let nameHash: TableColumn | undefined = new TableColumn({
                         name: "nameHash",
                         type: "varbinary",
                         length: "32",
                         asExpression: `HASH_MD5(TO_BINARY("firstName"))`,
                     })
 
-                    await queryRunner.addColumn(table!, nameWithoutSpace)
-                    await queryRunner.addColumn(table!, nameWithSpace)
-                    await queryRunner.addColumn(table!, nameHash)
+                    if (table) {
+                        await queryRunner.addColumn(table, nameWithoutSpace)
+                        await queryRunner.addColumn(table, nameWithSpace)
+                        await queryRunner.addColumn(table, nameHash)
+                    }
                     table = await queryRunner.getTable("post")
 
                     nameWithoutSpace =
-                        table!.findColumnByName("nameWithoutSpace")!
-                    nameWithoutSpace.should.be.exist
-                    nameWithoutSpace.asExpression!.should.be.equal(
+                        table?.findColumnByName("nameWithoutSpace")
+                    expect(nameWithoutSpace).to.be.exist
+                    nameWithoutSpace?.asExpression?.should.be.equal(
                         `"firstName" || "lastName"`,
                     )
 
-                    nameWithSpace = table!.findColumnByName("nameWithSpace")!
-                    nameWithSpace.should.be.exist
-                    nameWithSpace.asExpression!.should.be.equal(
+                    nameWithSpace = table?.findColumnByName("nameWithSpace")
+                    expect(nameWithSpace).to.be.exist
+                    nameWithSpace?.asExpression?.should.be.equal(
                         `"firstName" || ' ' || "lastName"`,
                     )
 
-                    nameHash = table!.findColumnByName("nameHash")!
-                    nameHash.should.be.exist
-                    nameHash.asExpression!.should.be.equal(
+                    nameHash = table?.findColumnByName("nameHash")
+                    expect(nameHash).to.be.exist
+                    nameHash?.asExpression?.should.be.equal(
                         `HASH_MD5(TO_BINARY("firstName"))`,
                     )
 
@@ -125,11 +130,11 @@ describe("database schema > generated columns > sap", () => {
                     await queryRunner.executeMemoryDownSql()
 
                     table = await queryRunner.getTable("post")
-                    expect(table!.findColumnByName("nameWithoutSpace")).to.be
+                    expect(table?.findColumnByName("nameWithoutSpace")).to.be
                         .undefined
-                    expect(table!.findColumnByName("nameWithSpace")).to.be
+                    expect(table?.findColumnByName("nameWithSpace")).to.be
                         .undefined
-                    expect(table!.findColumnByName("nameHash")).to.be.undefined
+                    expect(table?.findColumnByName("nameHash")).to.be.undefined
 
                     // check if generated column records removed from typeorm_metadata table
                     const metadataRecords = await queryRunner.query(
@@ -148,12 +153,14 @@ describe("database schema > generated columns > sap", () => {
                 const queryRunner = dataSource.createQueryRunner()
                 try {
                     let table = await queryRunner.getTable("post")
-                    await queryRunner.dropColumn(table!, "fullName")
-                    await queryRunner.dropColumn(table!, "name")
+                    if (table) {
+                        await queryRunner.dropColumn(table, "fullName")
+                        await queryRunner.dropColumn(table, "name")
+                    }
 
                     table = await queryRunner.getTable("post")
-                    expect(table!.findColumnByName("fullName")).to.be.undefined
-                    expect(table!.findColumnByName("name")).to.be.undefined
+                    expect(table?.findColumnByName("fullName")).to.be.undefined
+                    expect(table?.findColumnByName("name")).to.be.undefined
 
                     // check if generated column records removed from typeorm_metadata table
                     const metadataRecords = await queryRunner.query(
@@ -165,16 +172,15 @@ describe("database schema > generated columns > sap", () => {
                     await queryRunner.executeMemoryDownSql()
 
                     table = await queryRunner.getTable("post")
-
-                    const fullName = table!.findColumnByName("fullName")!
-                    fullName.should.be.exist
-                    fullName.asExpression!.should.be.equal(
+                    const fullName = table?.findColumnByName("fullName")
+                    expect(fullName).to.be.exist
+                    fullName?.asExpression?.should.be.equal(
                         `"firstName" || ' ' || "lastName"`,
                     )
 
-                    const name = table!.findColumnByName("name")!
-                    name.should.be.exist
-                    name.asExpression!.should.be.equal(
+                    const name = table?.findColumnByName("name")
+                    expect(name).to.be.exist
+                    name?.asExpression?.should.be.equal(
                         `"firstName" || "lastName"`,
                     )
                 } finally {
@@ -190,31 +196,43 @@ describe("database schema > generated columns > sap", () => {
                 try {
                     let table = await queryRunner.getTable("post")
 
-                    let fullName = table!.findColumnByName("fullName")!
-                    const changedFullName = fullName.clone()
-                    changedFullName.asExpression = `'Mr. ' || "firstName" || ' ' || "lastName"`
+                    let fullName = table?.findColumnByName("fullName")
+                    const changedFullName = fullName?.clone()
+                    if (changedFullName)
+                        changedFullName.asExpression = `'Mr. ' || "firstName" || ' ' || "lastName"`
 
-                    let name = table!.findColumnByName("name")!
-                    const changedName = name.clone()
-                    changedName.asExpression = undefined
+                    let name = table?.findColumnByName("name")
+                    const changedName = name?.clone()
+                    if (changedName) changedName.asExpression = undefined
 
-                    await queryRunner.changeColumns(table!, [
-                        {
-                            oldColumn: fullName,
-                            newColumn: changedFullName,
-                        },
-                        { oldColumn: name, newColumn: changedName },
-                    ])
+                    if (
+                        table &&
+                        fullName &&
+                        changedFullName &&
+                        name &&
+                        changedName
+                    ) {
+                        await queryRunner.changeColumns(table, [
+                            {
+                                oldColumn: fullName,
+                                newColumn: changedFullName,
+                            },
+                            {
+                                oldColumn: name,
+                                newColumn: changedName,
+                            },
+                        ])
+                    }
 
                     table = await queryRunner.getTable("post")
 
-                    fullName = table!.findColumnByName("fullName")!
-                    fullName.asExpression!.should.be.equal(
+                    fullName = table?.findColumnByName("fullName")
+                    fullName?.asExpression?.should.be.equal(
                         `'Mr. ' || "firstName" || ' ' || "lastName"`,
                     )
 
-                    name = table!.findColumnByName("name")!
-                    expect(name.asExpression).to.be.undefined
+                    name = table?.findColumnByName("name")
+                    expect(name?.asExpression).to.be.undefined
 
                     // check if generated column records removed from typeorm_metadata table
                     const metadataRecords = await queryRunner.query(
@@ -227,13 +245,13 @@ describe("database schema > generated columns > sap", () => {
 
                     table = await queryRunner.getTable("post")
 
-                    fullName = table!.findColumnByName("fullName")!
-                    fullName.asExpression!.should.be.equal(
+                    fullName = table?.findColumnByName("fullName")
+                    fullName?.asExpression?.should.be.equal(
                         `"firstName" || ' ' || "lastName"`,
                     )
 
-                    name = table!.findColumnByName("name")!
-                    name.asExpression!.should.be.equal(
+                    name = table?.findColumnByName("name")
+                    name?.asExpression?.should.be.equal(
                         `"firstName" || "lastName"`,
                     )
                 } finally {
@@ -248,21 +266,22 @@ describe("database schema > generated columns > sap", () => {
                 const queryRunner = dataSource.createQueryRunner()
                 try {
                     let table = await queryRunner.getTable("post")
-                    await queryRunner.renameColumn(
-                        table!,
-                        "fullName",
-                        "fullNameRenamed",
-                    )
+                    if (table)
+                        await queryRunner.renameColumn(
+                            table,
+                            "fullName",
+                            "fullNameRenamed",
+                        )
 
                     table = await queryRunner.getTable("post")
 
-                    const oldColumn = table!.findColumnByName("fullName")
+                    const oldColumn = table?.findColumnByName("fullName")
                     expect(oldColumn).to.be.undefined
 
                     const renamedColumn =
-                        table!.findColumnByName("fullNameRenamed")!
-                    renamedColumn.should.be.exist
-                    renamedColumn.asExpression!.should.be.equal(
+                        table?.findColumnByName("fullNameRenamed")
+                    expect(renamedColumn).to.exist
+                    renamedColumn?.asExpression?.should.be.equal(
                         `"firstName" || ' ' || "lastName"`,
                     )
 
@@ -281,12 +300,12 @@ describe("database schema > generated columns > sap", () => {
 
                     table = await queryRunner.getTable("post")
 
-                    const revertedColumn = table!.findColumnByName("fullName")!
-                    revertedColumn.should.be.exist
-                    revertedColumn.asExpression!.should.be.equal(
+                    const revertedColumn = table?.findColumnByName("fullName")
+                    expect(revertedColumn).to.exist
+                    revertedColumn?.asExpression?.should.be.equal(
                         `"firstName" || ' ' || "lastName"`,
                     )
-                    expect(table!.findColumnByName("fullNameRenamed")).to.be
+                    expect(table?.findColumnByName("fullNameRenamed")).to.be
                         .undefined
 
                     const revertedMetadataRecords = await queryRunner.query(
@@ -311,11 +330,11 @@ describe("database schema > generated columns > sap", () => {
                 const queryRunner = dataSource.createQueryRunner()
                 try {
                     const table = await queryRunner.getTable("post")
-                    const generatedColumns = table!.columns.filter(
+                    const generatedColumns = table?.columns.filter(
                         (it) => it.asExpression,
                     )
 
-                    await queryRunner.dropTable(table!)
+                    if (table) await queryRunner.dropTable(table)
 
                     // check if generated column records removed from typeorm_metadata table
                     let metadataRecords = await queryRunner.query(
@@ -330,7 +349,7 @@ describe("database schema > generated columns > sap", () => {
                         `SELECT * FROM "typeorm_metadata" WHERE "table" = 'post'`,
                     )
                     metadataRecords.length.should.be.equal(
-                        generatedColumns.length,
+                        generatedColumns?.length,
                     )
                 } finally {
                     await queryRunner.release()

@@ -797,8 +797,6 @@ export class SqlServerQueryRunner
             parsedTableName.schema ??= await this.getCurrentSchema()
 
             for (const column of generatedColumns) {
-                const parsedTableName = this.driver.parseTableName(table)
-
                 const deleteQuery = this.deleteTypeormMetadataSql({
                     database: parsedTableName.database,
                     schema: parsedTableName.schema,
