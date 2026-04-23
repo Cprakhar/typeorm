@@ -675,7 +675,7 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
             })
         }
 
-        // if table has column with generated type, we must add the expression to the metadata table
+        // if table has generated column, we must add the expression to the metadata table
         const generatedColumns = table.columns.filter(
             (column) => column.asExpression,
         )
@@ -1367,7 +1367,8 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
                 newColumn.generationStrategy !== "uuid") ||
             newColumn.type !== oldColumn.type ||
             newColumn.length !== oldColumn.length ||
-            newColumn.asExpression !== oldColumn.asExpression
+            (newColumn.asExpression ?? "").trim() !==
+                (oldColumn.asExpression ?? "").trim()
         ) {
             // SQL Server does not support changing of IDENTITY column, so we must drop column and recreate it again.
             // Also, we recreate column if column type changed
