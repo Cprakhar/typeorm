@@ -874,19 +874,20 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
             ),
         )
 
-        const generatedColumns = oldTable.columns.some(
+        const hasGeneratedColumns = oldTable.columns.some(
             (col) => col.asExpression,
         )
 
-        if (generatedColumns) {
+        if (hasGeneratedColumns) {
+            const schema = schemaName ?? (await this.getCurrentSchema())
             const updateQuery = this.updateTypeormMetadataSql({
-                schema: schemaName,
+                schema: schema,
                 table: oldTableName,
                 type: MetadataTableType.GENERATED_COLUMN,
                 valueToSet: { table: newTableName },
             })
             const revertUpdateQuery = this.updateTypeormMetadataSql({
-                schema: schemaName,
+                schema: schema,
                 table: newTableName,
                 type: MetadataTableType.GENERATED_COLUMN,
                 valueToSet: { table: oldTableName },
