@@ -14,7 +14,7 @@ describe("multi-schema-and-database > custom-junction-schema", () => {
     before(async () => {
         dataSources = await createTestingConnections({
             entities: [Post, Category],
-            enabledDrivers: ["mssql", "postgres"],
+            enabledDrivers: ["mssql", "postgres", "sap", "cockroachdb"],
         })
     })
     beforeEach(() => reloadTestingDatabases(dataSources))

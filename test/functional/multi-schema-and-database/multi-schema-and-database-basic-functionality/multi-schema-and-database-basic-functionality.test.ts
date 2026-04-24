@@ -14,13 +14,84 @@ import { Question } from "./entity/Question"
 import { Answer } from "./entity/Answer"
 import { DriverUtils } from "../../../../src/driver/DriverUtils"
 
+function getParameterPlaceholder(dataSource: DataSource): string | undefined {
+    const driverType = dataSource.driver.options.type
+
+    if (DriverUtils.isPostgresFamily(dataSource.driver)) return "$1"
+    if (driverType === "mssql") return "@0"
+    if (driverType === "sap") return "?"
+    if (DriverUtils.isMySQLFamily(dataSource.driver)) return "?"
+
+    return undefined
+}
+
+function getExpectedSqlByDriver(
+    dataSource: DataSource,
+    expected: {
+        postgres?: string
+        mssql?: string
+        sap?: string
+        mysql?: string
+    },
+): string | undefined {
+    const driverType = dataSource.driver.options.type
+
+    if (
+        DriverUtils.isPostgresFamily(dataSource.driver) &&
+        expected.postgres !== undefined
+    ) {
+        return expected.postgres
+    }
+    if (driverType === "mssql" && expected.mssql !== undefined) {
+        return expected.mssql
+    }
+    if (driverType === "sap" && expected.sap !== undefined) {
+        return expected.sap
+    }
+    if (
+        DriverUtils.isMySQLFamily(dataSource.driver) &&
+        expected.mysql !== undefined
+    ) {
+        return expected.mysql
+    }
+
+    return undefined
+}
+
+function expectSqlByDriver(
+    dataSource: DataSource,
+    sql: string,
+    expected: {
+        parameterized?: string
+        postgres?: string
+        mssql?: string
+        sap?: string
+        mysql?: string
+    },
+) {
+    const parameterPlaceholder = getParameterPlaceholder(dataSource)
+
+    if (
+        expected.parameterized !== undefined &&
+        parameterPlaceholder !== undefined
+    ) {
+        sql.should.be.equal(
+            expected.parameterized.replaceAll(":param", parameterPlaceholder),
+        )
+        return
+    }
+
+    const expectedSql = getExpectedSqlByDriver(dataSource, expected)
+    if (expectedSql !== undefined) sql.should.be.equal(expectedSql)
+}
+
 describe("multi-schema-and-database > basic-functionality", () => {
     describe("custom-table-schema", () => {
         let dataSources: DataSource[]
         before(async () => {
             dataSources = await createTestingConnections({
                 entities: [Post, User, Category],
-                enabledDrivers: ["mssql", "postgres"],
+                enabledDrivers: ["mssql", "postgres", "sap", "cockroachdb"],
                 schema: "custom",
             })
         })
@@ -67,15 +138,9 @@ describe("multi-schema-and-database > basic-functionality", () => {
                         .where("post.id = :id", { id: 1 })
                         .getSql()
 
-                    if (dataSource.driver.options.type === "postgres")
-                        sql.should.be.equal(
-                            `SELECT "post"."id" AS "post_id", "post"."name" AS "post_name" FROM "custom"."post" "post" WHERE "post"."id" = $1`,
-                        )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "post"."id" AS "post_id", "post"."name" AS "post_name" FROM "custom"."post" "post" WHERE "post"."id" = @0`,
-                        )
+                    expectSqlByDriver(dataSource, sql, {
+                        parameterized: `SELECT "post"."id" AS "post_id", "post"."name" AS "post_name" FROM "custom"."post" "post" WHERE "post"."id" = :param`,
+                    })
 
                     table!.name.should.be.equal("custom.post")
                 }),
@@ -97,15 +162,9 @@ describe("multi-schema-and-database > basic-functionality", () => {
                         .where("user.id = :id", { id: 1 })
                         .getSql()
 
-                    if (dataSource.driver.options.type === "postgres")
-                        sql.should.be.equal(
-                            `SELECT "user"."id" AS "user_id", "user"."name" AS "user_name" FROM "userSchema"."user" "user" WHERE "user"."id" = $1`,
-                        )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "user"."id" AS "user_id", "user"."name" AS "user_name" FROM "userSchema"."user" "user" WHERE "user"."id" = @0`,
-                        )
+                    expectSqlByDriver(dataSource, sql, {
+                        parameterized: `SELECT "user"."id" AS "user_id", "user"."name" AS "user_name" FROM "userSchema"."user" "user" WHERE "user"."id" = :param`,
+                    })
 
                     table!.name.should.be.equal("userSchema.user")
                 }),
@@ -143,19 +202,12 @@ describe("multi-schema-and-database > basic-functionality", () => {
                         .where("category.id = :id", { id: 1 })
                         .getSql()
 
-                    if (dataSource.driver.options.type === "postgres")
-                        sql.should.be.equal(
+                    expectSqlByDriver(dataSource, sql, {
+                        parameterized:
                             `SELECT "category"."id" AS "category_id", "category"."name" AS "category_name",` +
-                                ` "category"."postId" AS "category_postId", "post"."id" AS "post_id", "post"."name" AS "post_name"` +
-                                ` FROM "guest"."category" "category" INNER JOIN "custom"."post" "post" ON "post"."id"="category"."postId" WHERE "category"."id" = $1`,
-                        )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "category"."id" AS "category_id", "category"."name" AS "category_name",` +
-                                ` "category"."postId" AS "category_postId", "post"."id" AS "post_id", "post"."name" AS "post_name"` +
-                                ` FROM "guest"."category" "category" INNER JOIN "custom"."post" "post" ON "post"."id"="category"."postId" WHERE "category"."id" = @0`,
-                        )
+                            ` "category"."postId" AS "category_postId", "post"."id" AS "post_id", "post"."name" AS "post_name"` +
+                            ` FROM "guest"."category" "category" INNER JOIN "custom"."post" "post" ON "post"."id"="category"."postId" WHERE "category"."id" = :param`,
+                    })
 
                     table!.name.should.be.equal("guest.category")
                 }),
@@ -188,21 +240,11 @@ describe("multi-schema-and-database > basic-functionality", () => {
 
                     ;(await query.getRawOne())!.should.be.not.empty
 
-                    if (dataSource.driver.options.type === "postgres")
-                        query
-                            .getSql()
-                            .should.be.equal(
-                                `SELECT * FROM "guest"."category" "category", "userSchema"."user" "user",` +
-                                    ` "custom"."post" "post" WHERE "category"."id" = $1 AND "post"."id" = "category"."postId"`,
-                            )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        query
-                            .getSql()
-                            .should.be.equal(
-                                `SELECT * FROM "guest"."category" "category", "userSchema"."user" "user",` +
-                                    ` "custom"."post" "post" WHERE "category"."id" = @0 AND "post"."id" = "category"."postId"`,
-                            )
+                    expectSqlByDriver(dataSource, query.getSql(), {
+                        parameterized:
+                            `SELECT * FROM "guest"."category" "category", "userSchema"."user" "user",` +
+                            ` "custom"."post" "post" WHERE "category"."id" = :param AND "post"."id" = "category"."postId"`,
+                    })
                 }),
             ))
     })
@@ -354,15 +396,10 @@ describe("multi-schema-and-database > basic-functionality", () => {
                         .where("person.id = :id", { id: 1 })
                         .getSql()
 
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "person"."id" AS "person_id", "person"."name" AS "person_name" FROM "secondDB".."person" "person" WHERE "person"."id" = @0`,
-                        )
-
-                    if (DriverUtils.isMySQLFamily(dataSource.driver))
-                        sql.should.be.equal(
-                            "SELECT `person`.`id` AS `person_id`, `person`.`name` AS `person_name` FROM `secondDB`.`person` `person` WHERE `person`.`id` = ?",
-                        )
+                    expectSqlByDriver(dataSource, sql, {
+                        mssql: `SELECT "person"."id" AS "person_id", "person"."name" AS "person_name" FROM "secondDB".."person" "person" WHERE "person"."id" = @0`,
+                        mysql: "SELECT `person`.`id` AS `person_id`, `person`.`name` AS `person_name` FROM `secondDB`.`person` `person` WHERE `person`.`id` = ?",
+                    })
 
                     table!.name.should.be.equal(tablePath)
                 }),
