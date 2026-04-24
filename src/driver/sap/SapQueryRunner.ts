@@ -645,6 +645,10 @@ export class SapQueryRunner extends BaseQueryRunner implements QueryRunner {
         createForeignKeys: boolean = true,
         createIndices: boolean = true,
     ): Promise<void> {
+        const tableSchema = table.schema ?? (await this.getCurrentSchema())
+        const hasSchema = await this.hasSchema(tableSchema)
+        if (!hasSchema) await this.createSchema(tableSchema, true)
+
         if (ifNotExists) {
             const isTableExist = await this.hasTable(table)
             if (isTableExist) return Promise.resolve()

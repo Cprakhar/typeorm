@@ -449,36 +449,6 @@ export async function createTestingConnections(
                 )
             }
 
-            // create new schemas
-            const schemaPaths: Set<string> = new Set()
-            connection.entityMetadatas
-                .filter((entityMetadata) => !!entityMetadata.schema)
-                .forEach((entityMetadata) => {
-                    let schema = entityMetadata.schema!
-
-                    if (entityMetadata.database) {
-                        schema = `${entityMetadata.database}.${schema}`
-                    }
-
-                    schemaPaths.add(schema)
-                })
-
-            const schema = connection.driver.options?.hasOwnProperty("schema")
-                ? (connection.driver.options as any).schema
-                : undefined
-
-            if (schema) {
-                schemaPaths.add(schema)
-            }
-
-            for (const schemaPath of schemaPaths) {
-                try {
-                    await queryRunner.createSchema(schemaPath, true)
-                } catch {
-                    // Do nothing
-                }
-            }
-
             await queryRunner.release()
         }),
     )

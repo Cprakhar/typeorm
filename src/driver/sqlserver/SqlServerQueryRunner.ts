@@ -438,7 +438,7 @@ export class SqlServerQueryRunner
      */
     async getSchemas(database?: string): Promise<string[]> {
         const query = database
-            ? `SELECT * FROM "${database}"."sys"."schema"`
+            ? `SELECT * FROM "${database}"."sys"."schemas"`
             : `SELECT * FROM "sys"."schemas"`
         const results: ObjectLiteral[] = await this.query(query)
         return results.map((result) => result["name"])
@@ -681,6 +681,18 @@ export class SqlServerQueryRunner
         createForeignKeys: boolean = true,
         createIndices: boolean = true,
     ): Promise<void> {
+        const currentSchema = await this.getCurrentSchema()
+        const currentDatabase = await this.getCurrentDatabase()
+        const tableDatabase = table.database ?? currentDatabase
+        const tableSchema = table.schema ?? currentSchema
+
+        const hasSchema = await this.hasSchema(tableSchema)
+
+        if (!hasSchema) {
+            const schemaPath = `${tableDatabase}.${tableSchema}`
+            await this.createSchema(schemaPath, true)
+        }
+
         if (ifNotExists) {
             const isTableExist = await this.hasTable(table)
             if (isTableExist) return Promise.resolve()
