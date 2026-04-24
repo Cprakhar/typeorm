@@ -11,11 +11,12 @@ import { expect } from "chai"
 
 describe("multi-schema-and-database > custom-junction-schema", () => {
     let dataSources: DataSource[]
-    before(async () => {
+    before(async function () {
         dataSources = await createTestingConnections({
             entities: [Post, Category],
             enabledDrivers: ["mssql", "postgres", "sap", "cockroachdb"],
         })
+        if (!dataSources.length) this.skip()
     })
     beforeEach(() => reloadTestingDatabases(dataSources))
     after(() => closeTestingConnections(dataSources))
