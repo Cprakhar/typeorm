@@ -649,8 +649,7 @@ export class CockroachQueryRunner
         createIndices: boolean = true,
     ): Promise<void> {
         const tableSchema = table.schema ?? (await this.getCurrentSchema())
-        const hasSchema = await this.hasSchema(tableSchema)
-        if (!hasSchema) await this.createSchema(tableSchema, true)
+        await this.createSchema(tableSchema, true)
 
         if (ifNotExists) {
             const isTableExist = await this.hasTable(table)

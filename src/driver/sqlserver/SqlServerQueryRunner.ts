@@ -681,17 +681,11 @@ export class SqlServerQueryRunner
         createForeignKeys: boolean = true,
         createIndices: boolean = true,
     ): Promise<void> {
-        const currentSchema = await this.getCurrentSchema()
-        const currentDatabase = await this.getCurrentDatabase()
-        const tableDatabase = table.database ?? currentDatabase
-        const tableSchema = table.schema ?? currentSchema
-
-        const hasSchema = await this.hasSchema(tableSchema)
-
-        if (!hasSchema) {
-            const schemaPath = `${tableDatabase}.${tableSchema}`
-            await this.createSchema(schemaPath, true)
-        }
+        const tableDatabase =
+            table.database ?? (await this.getCurrentDatabase())
+        const tableSchema = table.schema ?? (await this.getCurrentSchema())
+        const schemaPath = `${tableDatabase}.${tableSchema}`
+        await this.createSchema(schemaPath, true)
 
         if (ifNotExists) {
             const isTableExist = await this.hasTable(table)
