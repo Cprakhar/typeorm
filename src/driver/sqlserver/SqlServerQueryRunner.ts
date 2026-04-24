@@ -229,6 +229,8 @@ export class SqlServerQueryRunner
         await this.broadcaster.broadcast("BeforeQuery", query, parameters)
 
         const broadcasterResult = new BroadcasterResult()
+        const maxQueryExecutionTime = this.driver.options.maxQueryExecutionTime
+        let queryStartTime: number | undefined
 
         try {
             const pool = await (this.mode === "slave"
@@ -257,45 +259,36 @@ export class SqlServerQueryRunner
                     }
                 })
             }
-            const queryStartTime = Date.now()
+            queryStartTime = Date.now()
 
-            const raw = await new Promise<any>((ok, fail) => {
-                request.query(query, (err: any, raw: any) => {
-                    // log slow queries if maxQueryExecution time is set
-                    const maxQueryExecutionTime =
-                        this.driver.options.maxQueryExecutionTime
-                    const queryEndTime = Date.now()
-                    const queryExecutionTime = queryEndTime - queryStartTime
-
-                    this.broadcaster.broadcastAfterQueryEvent(
-                        broadcasterResult,
-                        query,
-                        parameters,
-                        true,
-                        queryExecutionTime,
-                        raw,
-                        undefined,
-                    )
-
-                    if (
-                        maxQueryExecutionTime &&
-                        queryExecutionTime > maxQueryExecutionTime
-                    ) {
-                        this.driver.dataSource.logger.logQuerySlow(
-                            queryExecutionTime,
-                            query,
-                            parameters,
-                            this,
-                        )
-                    }
-
-                    if (err) {
-                        fail(new QueryFailedError(query, parameters, err))
-                    }
-
-                    ok(raw)
-                })
+            const raw = await request.query(query).catch((err: Error) => {
+                throw new QueryFailedError(query, parameters, err)
             })
+
+            // log slow queries if maxQueryExecution time is set
+            const queryExecutionTime = Date.now() - queryStartTime
+
+            this.broadcaster.broadcastAfterQueryEvent(
+                broadcasterResult,
+                query,
+                parameters,
+                true,
+                queryExecutionTime,
+                raw,
+                undefined,
+            )
+
+            if (
+                maxQueryExecutionTime &&
+                queryExecutionTime > maxQueryExecutionTime
+            ) {
+                this.driver.dataSource.logger.logQuerySlow(
+                    queryExecutionTime,
+                    query,
+                    parameters,
+                    this,
+                )
+            }
 
             const result = new QueryResult()
 
@@ -317,12 +310,25 @@ export class SqlServerQueryRunner
                     result.raw = raw.recordset
             }
 
-            if (useStructuredResult) {
-                return result
-            } else {
-                return result.raw
-            }
+            return useStructuredResult ? result : result.raw
         } catch (err) {
+            const queryExecutionTime = queryStartTime
+                ? Date.now() - queryStartTime
+                : undefined
+
+            if (
+                maxQueryExecutionTime &&
+                queryExecutionTime !== undefined &&
+                queryExecutionTime > maxQueryExecutionTime
+            ) {
+                this.driver.dataSource.logger.logQuerySlow(
+                    queryExecutionTime,
+                    query,
+                    parameters,
+                    this,
+                )
+            }
+
             this.driver.dataSource.logger.logQueryError(
                 err,
                 query,
