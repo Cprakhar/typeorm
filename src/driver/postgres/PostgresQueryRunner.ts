@@ -3814,7 +3814,7 @@ export class PostgresQueryRunner
                     schema,
                 )
 
-                let dbGeneratedColumns: ObjectLiteral[] = []
+                const dbGeneratedColumns: ObjectLiteral[] = []
                 if (hasTable) {
                     const generatedColumnSql = this.selectTypeormMetadataSql({
                         database: currentDatabase,
@@ -3822,9 +3822,11 @@ export class PostgresQueryRunner
                         type: MetadataTableType.GENERATED_COLUMN,
                         table: dbTable["table_name"],
                     })
-                    dbGeneratedColumns = await this.query(
-                        generatedColumnSql?.query,
-                        generatedColumnSql?.parameters,
+                    dbGeneratedColumns.push(
+                        ...(await this.query(
+                            generatedColumnSql.query,
+                            generatedColumnSql.parameters,
+                        )),
                     )
                 }
 

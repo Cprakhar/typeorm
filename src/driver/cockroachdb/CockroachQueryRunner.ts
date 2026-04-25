@@ -733,7 +733,7 @@ export class CockroachQueryRunner
             for (const column of generatedColumns) {
                 const insertQuery = this.insertTypeormMetadataSql({
                     schema: parsedTableName.schema,
-                    table: table.name,
+                    table: parsedTableName.tableName,
                     type: MetadataTableType.GENERATED_COLUMN,
                     name: column.name,
                     value: column.asExpression,
@@ -741,7 +741,7 @@ export class CockroachQueryRunner
 
                 const deleteQuery = this.deleteTypeormMetadataSql({
                     schema: parsedTableName.schema,
-                    table: table.name,
+                    table: parsedTableName.tableName,
                     type: MetadataTableType.GENERATED_COLUMN,
                     name: column.name,
                 })
@@ -833,14 +833,14 @@ export class CockroachQueryRunner
             for (const column of generatedColumns) {
                 const deleteQuery = this.deleteTypeormMetadataSql({
                     schema: parsedTableName.schema,
-                    table: table.name,
+                    table: parsedTableName.tableName,
                     type: MetadataTableType.GENERATED_COLUMN,
                     name: column.name,
                 })
 
                 const insertQuery = this.insertTypeormMetadataSql({
                     schema: parsedTableName.schema,
-                    table: table.name,
+                    table: parsedTableName.tableName,
                     type: MetadataTableType.GENERATED_COLUMN,
                     name: column.name,
                     value: column.asExpression,
@@ -937,6 +937,30 @@ export class CockroachQueryRunner
                 )} RENAME TO "${oldTableName}"`,
             ),
         )
+
+        const hasGeneratedColumns = oldTable.columns.some(
+            (col) => col.generatedType && col.asExpression,
+        )
+        if (hasGeneratedColumns) {
+            const parsedTableName = this.driver.parseTableName(oldTable)
+            parsedTableName.schema ??= await this.getCurrentSchema()
+
+            const updateQuery = this.updateTypeormMetadataSql({
+                schema: parsedTableName.schema,
+                table: oldTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: newTableName },
+            })
+            const reverseUpdateQuery = this.updateTypeormMetadataSql({
+                schema: parsedTableName.schema,
+                table: newTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: oldTableName },
+            })
+
+            upQueries.push(updateQuery)
+            downQueries.push(reverseUpdateQuery)
+        }
 
         // rename column primary key constraint
         if (
@@ -1235,20 +1259,19 @@ export class CockroachQueryRunner
         }
 
         if (column.generatedType && column.asExpression) {
-            const currentSchema = await this.getCurrentSchema()
-            let { schema } = this.driver.parseTableName(table)
-            schema ??= currentSchema
+            const parsedTableName = this.driver.parseTableName(table)
+            parsedTableName.schema ??= await this.getCurrentSchema()
             const insertQuery = this.insertTypeormMetadataSql({
-                schema: schema,
-                table: table.name,
+                schema: parsedTableName.schema,
+                table: parsedTableName.tableName,
                 type: MetadataTableType.GENERATED_COLUMN,
                 name: column.name,
                 value: column.asExpression,
             })
 
             const deleteQuery = this.deleteTypeormMetadataSql({
-                schema: schema,
-                table: table.name,
+                schema: parsedTableName.schema,
+                table: parsedTableName.tableName,
                 type: MetadataTableType.GENERATED_COLUMN,
                 name: column.name,
             })
@@ -1406,7 +1429,8 @@ export class CockroachQueryRunner
             oldColumn.length !== newColumn.length ||
             newColumn.isArray !== oldColumn.isArray ||
             oldColumn.generatedType !== newColumn.generatedType ||
-            oldColumn.asExpression !== newColumn.asExpression
+            (oldColumn.asExpression ?? "").trim() !==
+                (newColumn.asExpression ?? "").trim()
         ) {
             // To avoid data conversion, we just recreate column
             await this.dropColumn(table, oldColumn)
@@ -1431,6 +1455,29 @@ export class CockroachQueryRunner
                         }" TO "${oldColumn.name}"`,
                     ),
                 )
+
+                if (oldColumn.generatedType && oldColumn.asExpression) {
+                    const parsedTableName = this.driver.parseTableName(table)
+                    parsedTableName.schema ??= await this.getCurrentSchema()
+
+                    const updateQuery = this.updateTypeormMetadataSql({
+                        schema: parsedTableName.schema,
+                        table: parsedTableName.tableName,
+                        type: MetadataTableType.GENERATED_COLUMN,
+                        name: oldColumn.name,
+                        valueToSet: { name: newColumn.name },
+                    })
+                    const revertUpdateQuery = this.updateTypeormMetadataSql({
+                        schema: parsedTableName.schema,
+                        table: parsedTableName.tableName,
+                        type: MetadataTableType.GENERATED_COLUMN,
+                        name: newColumn.name,
+                        valueToSet: { name: oldColumn.name },
+                    })
+
+                    upQueries.push(updateQuery)
+                    downQueries.push(revertUpdateQuery)
+                }
 
                 // rename ENUM type
                 if (
@@ -2359,18 +2406,17 @@ export class CockroachQueryRunner
         }
 
         if (column.generatedType && column.asExpression) {
-            const currentSchema = await this.getCurrentSchema()
-            let { schema } = this.driver.parseTableName(table)
-            schema ??= currentSchema
+            const parsedTableName = this.driver.parseTableName(table)
+            parsedTableName.schema ??= await this.getCurrentSchema()
             const deleteQuery = this.deleteTypeormMetadataSql({
-                schema: schema,
-                table: table.name,
+                schema: parsedTableName.schema,
+                table: parsedTableName.tableName,
                 type: MetadataTableType.GENERATED_COLUMN,
                 name: column.name,
             })
             const insertQuery = this.insertTypeormMetadataSql({
-                schema: schema,
-                table: table.name,
+                schema: parsedTableName.schema,
+                table: parsedTableName.tableName,
                 type: MetadataTableType.GENERATED_COLUMN,
                 name: column.name,
                 value: column.asExpression,
@@ -3175,6 +3221,7 @@ export class CockroachQueryRunner
      * @param tableNames
      */
     protected async loadTables(tableNames?: string[]): Promise<Table[]> {
+        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
         // if no tables given then no need to proceed
         if (tableNames?.length === 0) {
             return []
@@ -3208,7 +3255,7 @@ export class CockroachQueryRunner
             return []
         }
 
-        const columnsCondiiton = dbTables
+        const columnsCondition = dbTables
             .map(({ table_name, table_schema }) => {
                 return `("table_schema" = '${table_schema}' AND "table_name" = '${table_name}')`
             })
@@ -3217,11 +3264,11 @@ export class CockroachQueryRunner
             `SELECT "columns".*, "attr"."attgenerated" as "generated_type", ` +
             `pg_catalog.col_description((quote_ident(table_catalog) || '.' || quote_ident(table_schema) || '.' || quote_ident(table_name))::regclass::oid, ordinal_position) as description ` +
             `FROM "information_schema"."columns" ` +
-            `LEFT JOIN "pg_class" AS "cls" ON "cls"."relname" = "table_name" ` +
-            `LEFT JOIN "pg_namespace" AS "ns" ON "ns"."oid" = "cls"."relnamespace" AND "ns"."nspname" = "table_schema" ` +
+            `LEFT JOIN "pg_namespace" AS "ns" ON "ns"."nspname" = "table_schema" ` +
+            `LEFT JOIN "pg_class" AS "cls" ON "cls"."relnamespace" = "ns"."oid" AND "cls"."relname" = "table_name" ` +
             `LEFT JOIN "pg_attribute" AS "attr" ON "attr"."attrelid" = "cls"."oid" AND "attr"."attname" = "column_name" AND "attr"."attnum" = "ordinal_position" ` +
             `WHERE "is_hidden" = 'NO' AND ` +
-            columnsCondiiton
+            `(${columnsCondition})`
 
         const constraintsCondition = dbTables
             .map(({ table_name, table_schema }) => {
@@ -3312,6 +3359,21 @@ export class CockroachQueryRunner
                     dbTable["table_name"],
                     schema,
                 )
+
+                const dbGeneratedColumns: ObjectLiteral[] = []
+                if (hasTable) {
+                    const generatedColumnSql = this.selectTypeormMetadataSql({
+                        schema: dbTable["table_schema"],
+                        table: dbTable["table_name"],
+                        type: MetadataTableType.GENERATED_COLUMN,
+                    })
+                    dbGeneratedColumns.push(
+                        ...(await this.query(
+                            generatedColumnSql.query,
+                            generatedColumnSql.parameters,
+                        )),
+                    )
+                }
 
                 // create columns from the loaded columns
                 table.columns = await Promise.all(
@@ -3606,23 +3668,10 @@ export class CockroachQueryRunner
                                         ? "STORED"
                                         : "VIRTUAL"
                                 // We cannot relay on information_schema.columns.generation_expression, because it is formatted different.
-                                const asExpressionQuery =
-                                    this.selectTypeormMetadataSql({
-                                        schema: dbTable["table_schema"],
-                                        table: dbTable["table_name"],
-                                        type: MetadataTableType.GENERATED_COLUMN,
-                                        name: tableColumn.name,
-                                    })
-
-                                const results = await this.query(
-                                    asExpressionQuery.query,
-                                    asExpressionQuery.parameters,
-                                )
-                                if (results[0]?.value) {
-                                    tableColumn.asExpression = results[0].value
-                                } else {
-                                    tableColumn.asExpression = ""
-                                }
+                                tableColumn.asExpression =
+                                    dbGeneratedColumns.find(
+                                        (gc) => gc["name"] === tableColumn.name,
+                                    )?.value ?? ""
                             }
 
                             tableColumn.comment =
