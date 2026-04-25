@@ -103,14 +103,20 @@ describe("multi-schema-and-database > basic-functionality", () => {
             Promise.all(
                 dataSources.map(async (dataSource) => {
                     const queryRunner = dataSource.createQueryRunner()
-                    const table = (await queryRunner.getTable(
-                        "testDB.questions.question",
-                    ))!
-                    await queryRunner.release()
+                    try {
+                        const table = await queryRunner.getTable(
+                            "testDB.questions.question",
+                        )
 
-                    expect(table.database).to.be.equal("testDB")
-                    expect(table.schema).to.be.equal("questions")
-                    expect(table.name).to.be.equal("testDB.questions.question")
+                        expect(table).to.be.exist
+                        expect(table?.database).to.equal("testDB")
+                        expect(table?.schema).to.equal("questions")
+                        expect(table?.name).to.equal(
+                            "testDB.questions.question",
+                        )
+                    } finally {
+                        await queryRunner.release()
+                    }
                 }),
             ))
 
@@ -118,13 +124,18 @@ describe("multi-schema-and-database > basic-functionality", () => {
             Promise.all(
                 dataSources.map(async (dataSource) => {
                     const queryRunner = dataSource.createQueryRunner()
-                    const table = (await queryRunner.getTable(
-                        "testDB.questions.question",
-                    ))!
-                    await queryRunner.release()
-
-                    expect(table.primaryColumns).to.have.length(1)
-                    expect(table.findColumnByName("id")?.isGenerated).to.be.true
+                    try {
+                        const table = await queryRunner.getTable(
+                            "testDB.questions.question",
+                        )
+                        expect(table).to.be.exist
+                        expect(table?.primaryColumns).to.have.length(1)
+                        const column = table?.findColumnByName("id")
+                        expect(column).to.be.exist
+                        expect(column?.isGenerated).to.be.true
+                    } finally {
+                        await queryRunner.release()
+                    }
                 }),
             ))
 
@@ -132,24 +143,30 @@ describe("multi-schema-and-database > basic-functionality", () => {
             Promise.all(
                 dataSources.map(async (dataSource) => {
                     const queryRunner = dataSource.createQueryRunner()
-                    const table = await queryRunner.getTable(
-                        "testDB.questions.question",
-                    )
-                    await queryRunner.release()
+                    try {
+                        const table = await queryRunner.getTable(
+                            "testDB.questions.question",
+                        )
 
-                    const question = new Question()
-                    question.name = "Question #1"
-                    await dataSource.getRepository(Question).save(question)
+                        const question = new Question()
+                        question.name = "Question #1"
+                        await dataSource.getRepository(Question).save(question)
 
-                    const sql = dataSource
-                        .createQueryBuilder(Question, "question")
-                        .where("question.id = :id", { id: 1 })
-                        .getSql()
+                        const sql = dataSource
+                            .createQueryBuilder(Question, "question")
+                            .where("question.id = :id", { id: 1 })
+                            .getSql()
 
-                    sql.should.be.equal(
-                        `SELECT "question"."id" AS "question_id", "question"."name" AS "question_name" FROM "testDB"."questions"."question" "question" WHERE "question"."id" = @0`,
-                    )
-                    table!.name.should.be.equal("testDB.questions.question")
+                        sql.should.be.equal(
+                            `SELECT "question"."id" AS "question_id", "question"."name" AS "question_name" FROM "testDB"."questions"."question" "question" WHERE "question"."id" = @0`,
+                        )
+                        expect(table).to.be.exist
+                        expect(table?.name).to.equal(
+                            "testDB.questions.question",
+                        )
+                    } finally {
+                        await queryRunner.release()
+                    }
                 }),
             ))
 
@@ -157,49 +174,56 @@ describe("multi-schema-and-database > basic-functionality", () => {
             Promise.all(
                 dataSources.map(async (dataSource) => {
                     const queryRunner = dataSource.createQueryRunner()
-                    const questionTable = await queryRunner.getTable(
-                        "testDB.questions.question",
-                    )
-                    const answerTable = await queryRunner.getTable(
-                        "secondDB.answers.answer",
-                    )
-                    await queryRunner.release()
-
-                    const question = new Question()
-                    question.name = "Question #1"
-                    await dataSource.getRepository(Question).save(question)
-
-                    const answer1 = new Answer()
-                    answer1.text = "answer 1"
-                    answer1.questionId = question.id
-                    await dataSource.getRepository(Answer).save(answer1)
-
-                    const answer2 = new Answer()
-                    answer2.text = "answer 2"
-                    answer2.questionId = question.id
-                    await dataSource.getRepository(Answer).save(answer2)
-
-                    const query = dataSource
-                        .createQueryBuilder()
-                        .select()
-                        .from(Question, "question")
-                        .addFrom(Answer, "answer")
-                        .where("question.id = :id", { id: 1 })
-                        .andWhere("answer.questionId = question.id")
-
-                    expect(await query.getRawOne()).to.be.not.empty
-
-                    query
-                        .getSql()
-                        .should.be.equal(
-                            `SELECT * FROM "testDB"."questions"."question" "question", "secondDB"."answers"."answer"` +
-                                ` "answer" WHERE "question"."id" = @0 AND "answer"."questionId" = "question"."id"`,
+                    try {
+                        const questionTable = await queryRunner.getTable(
+                            "testDB.questions.question",
+                        )
+                        const answerTable = await queryRunner.getTable(
+                            "secondDB.answers.answer",
                         )
 
-                    questionTable!.name.should.be.equal(
-                        "testDB.questions.question",
-                    )
-                    answerTable!.name.should.be.equal("secondDB.answers.answer")
+                        const question = new Question()
+                        question.name = "Question #1"
+                        await dataSource.getRepository(Question).save(question)
+
+                        const answer1 = new Answer()
+                        answer1.text = "answer 1"
+                        answer1.questionId = question.id
+                        await dataSource.getRepository(Answer).save(answer1)
+
+                        const answer2 = new Answer()
+                        answer2.text = "answer 2"
+                        answer2.questionId = question.id
+                        await dataSource.getRepository(Answer).save(answer2)
+
+                        const query = dataSource
+                            .createQueryBuilder()
+                            .select()
+                            .from(Question, "question")
+                            .addFrom(Answer, "answer")
+                            .where("question.id = :id", { id: 1 })
+                            .andWhere("answer.questionId = question.id")
+
+                        expect(await query.getRawOne()).to.be.not.empty
+
+                        query
+                            .getSql()
+                            .should.be.equal(
+                                `SELECT * FROM "testDB"."questions"."question" "question", "secondDB"."answers"."answer"` +
+                                    ` "answer" WHERE "question"."id" = @0 AND "answer"."questionId" = "question"."id"`,
+                            )
+
+                        expect(questionTable).to.be.exist
+                        expect(answerTable).to.be.exist
+                        expect(questionTable?.name).to.equal(
+                            "testDB.questions.question",
+                        )
+                        expect(answerTable?.name).to.equal(
+                            "secondDB.answers.answer",
+                        )
+                    } finally {
+                        await queryRunner.release()
+                    }
                 }),
             ))
     })
@@ -219,28 +243,32 @@ describe("multi-schema-and-database > basic-functionality", () => {
             Promise.all(
                 dataSources.map(async (dataSource) => {
                     const queryRunner = dataSource.createQueryRunner()
-                    const tablePath =
-                        dataSource.driver.options.type === "mssql"
-                            ? "secondDB..person"
-                            : "secondDB.person"
-                    const table = await queryRunner.getTable(tablePath)
-                    await queryRunner.release()
+                    try {
+                        const tablePath =
+                            dataSource.driver.options.type === "mssql"
+                                ? "secondDB..person"
+                                : "secondDB.person"
+                        const table = await queryRunner.getTable(tablePath)
 
-                    const person = new Person()
-                    person.name = "Person #1"
-                    await dataSource.getRepository(Person).save(person)
+                        const person = new Person()
+                        person.name = "Person #1"
+                        await dataSource.getRepository(Person).save(person)
 
-                    const sql = dataSource
-                        .createQueryBuilder(Person, "person")
-                        .where("person.id = :id", { id: 1 })
-                        .getSql()
+                        const sql = dataSource
+                            .createQueryBuilder(Person, "person")
+                            .where("person.id = :id", { id: 1 })
+                            .getSql()
 
-                    expectSqlByDriver(dataSource, sql, {
-                        mssql: `SELECT "person"."id" AS "person_id", "person"."name" AS "person_name" FROM "secondDB".."person" "person" WHERE "person"."id" = @0`,
-                        mysql: "SELECT `person`.`id` AS `person_id`, `person`.`name` AS `person_name` FROM `secondDB`.`person` `person` WHERE `person`.`id` = ?",
-                    })
+                        expectSqlByDriver(dataSource, sql, {
+                            mssql: `SELECT "person"."id" AS "person_id", "person"."name" AS "person_name" FROM "secondDB".."person" "person" WHERE "person"."id" = @0`,
+                            mysql: "SELECT `person`.`id` AS `person_id`, `person`.`name` AS `person_name` FROM `secondDB`.`person` `person` WHERE `person`.`id` = ?",
+                        })
 
-                    table!.name.should.be.equal(tablePath)
+                        expect(table).to.be.exist
+                        expect(table?.name).to.equal(tablePath)
+                    } finally {
+                        await queryRunner.release()
+                    }
                 }),
             ))
     })
@@ -257,7 +285,7 @@ describe("multi-schema-and-database > basic-functionality", () => {
                 let dataSources: DataSource[]
                 before(async () => {
                     dataSources = await createTestingConnections({
-                        entities: [User, Category, Post, PostWithSchema],
+                        entities: [User, Category, Post],
                         enabledDrivers: driver,
                         schema: driver.includes("sap") ? undefined : "custom",
                     })
@@ -272,12 +300,11 @@ describe("multi-schema-and-database > basic-functionality", () => {
                         dataSources.map(async (dataSource) => {
                             const queryRunner = dataSource.createQueryRunner()
                             try {
-                                const table =
-                                    (await queryRunner.getTable("post"))!
+                                const table = await queryRunner.getTable("post")
 
-                                expect(table.database).to.not.be.undefined
-                                expect(table.schema).to.be.equal("custom")
-                                expect(table.columns).to.have.length(2)
+                                expect(table).to.be.exist
+                                expect(table?.database).to.not.be.undefined
+                                expect(table?.schema).to.be.equal("custom")
                             } finally {
                                 await queryRunner.release()
                             }
@@ -290,13 +317,13 @@ describe("multi-schema-and-database > basic-functionality", () => {
                         dataSources.map(async (dataSource) => {
                             const queryRunner = dataSource.createQueryRunner()
                             try {
-                                const table =
-                                    (await queryRunner.getTable("post"))!
+                                const table = await queryRunner.getTable("post")
 
-                                expect(table.primaryColumns).to.have.length(1)
-                                expect(
-                                    table.findColumnByName("id")?.isGenerated,
-                                ).to.be.true
+                                expect(table).to.be.exist
+                                expect(table?.primaryColumns).to.have.length(1)
+                                const column = table?.findColumnByName("id")
+                                expect(column).to.be.exist
+                                expect(column?.isGenerated).to.be.true
                             } finally {
                                 await queryRunner.release()
                             }
@@ -325,7 +352,8 @@ describe("multi-schema-and-database > basic-functionality", () => {
                                     parameterized: `SELECT "post"."id" AS "post_id", "post"."name" AS "post_name" FROM "custom"."post" "post" WHERE "post"."id" = :param`,
                                 })
 
-                                table!.name.should.be.equal("custom.post")
+                                expect(table).to.be.exist
+                                expect(table?.name).to.be.equal("custom.post")
                             } finally {
                                 await queryRunner.release()
                             }
@@ -356,7 +384,10 @@ describe("multi-schema-and-database > basic-functionality", () => {
                                     parameterized: `SELECT "user"."id" AS "user_id", "user"."name" AS "user_name" FROM "userSchema"."user" "user" WHERE "user"."id" = :param`,
                                 })
 
-                                table!.name.should.be.equal("userSchema.user")
+                                expect(table).to.be.exist
+                                expect(table?.name).to.be.equal(
+                                    "userSchema.user",
+                                )
                             } finally {
                                 await queryRunner.release()
                             }
@@ -388,9 +419,9 @@ describe("multi-schema-and-database > basic-functionality", () => {
                                     .where("category.id = :id", { id: 1 })
                                     .getOne()
 
-                                loadedCategory!.should.be.not.empty
-                                loadedCategory!.post.should.be.not.empty
-                                loadedCategory!.post.id.should.be.equal(1)
+                                expect(loadedCategory).to.be.exist
+                                expect(loadedCategory?.post).to.be.exist
+                                expect(loadedCategory?.post.id).to.be.equal(1)
 
                                 const sql = dataSource
                                     .createQueryBuilder(Category, "category")
@@ -405,7 +436,10 @@ describe("multi-schema-and-database > basic-functionality", () => {
                                         ` FROM "guest"."category" "category" INNER JOIN ${driver.includes("sap") ? "" : '"custom".'}"post" "post" ON "post"."id"="category"."postId" WHERE "category"."id" = :param`,
                                 })
 
-                                table!.name.should.be.equal("guest.category")
+                                expect(table).to.be.exist
+                                expect(table?.name).to.be.equal(
+                                    "guest.category",
+                                )
                             } finally {
                                 await queryRunner.release()
                             }
@@ -439,7 +473,7 @@ describe("multi-schema-and-database > basic-functionality", () => {
                                 .where("category.id = :id", { id: 1 })
                                 .andWhere("post.id = category.post")
 
-                            ;(await query.getRawOne())!.should.be.not.empty
+                            expect(await query.getRawOne()).to.be.not.empty
 
                             expectSqlByDriver(dataSource, query.getSql(), {
                                 parameterized:
@@ -450,5 +484,39 @@ describe("multi-schema-and-database > basic-functionality", () => {
                     ))
             })
         }
+
+        describe("same tables in different schemas", () => {
+            let dataSources: DataSource[]
+            before(async () => {
+                dataSources = await createTestingConnections({
+                    entities: [Post, PostWithSchema],
+                    enabledDrivers: ["postgres", "cockroachdb", "mssql", "sap"],
+                })
+            })
+            beforeEach(() => reloadTestingDatabases(dataSources))
+            after(() => closeTestingConnections(dataSources))
+            it("should create tables in the correct schema", () =>
+                Promise.all(
+                    dataSources.map(async (dataSource) => {
+                        const queryRunner = dataSource.createQueryRunner()
+                        try {
+                            const postTable = await queryRunner.getTable("post")
+                            const postWithSchema =
+                                await queryRunner.getTable("custom.post")
+
+                            expect(postTable).to.be.exist
+                            expect(postTable?.name).to.be.equal("post")
+                            expect(postTable?.columns).lengthOf(2)
+                            expect(postWithSchema).to.be.exist
+                            expect(postWithSchema?.name).to.be.equal(
+                                "custom.post",
+                            )
+                            expect(postWithSchema?.columns).lengthOf(2)
+                        } finally {
+                            await queryRunner.release()
+                        }
+                    }),
+                ))
+        })
     })
 })

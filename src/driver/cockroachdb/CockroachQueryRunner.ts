@@ -3208,7 +3208,7 @@ export class CockroachQueryRunner
             return []
         }
 
-        const columnsCondiiton = dbTables
+        const columnsCondition = dbTables
             .map(({ table_name, table_schema }) => {
                 return `("table_schema" = '${table_schema}' AND "table_name" = '${table_name}')`
             })
@@ -3221,7 +3221,7 @@ export class CockroachQueryRunner
             `LEFT JOIN "pg_class" AS "cls" ON "cls"."relnamespace" = "ns"."oid" AND "cls"."relname" = "table_name" ` +
             `LEFT JOIN "pg_attribute" AS "attr" ON "attr"."attrelid" = "cls"."oid" AND "attr"."attname" = "column_name" AND "attr"."attnum" = "ordinal_position" ` +
             `WHERE "is_hidden" = 'NO' AND ` +
-            `(${columnsCondiiton})`
+            `(${columnsCondition})`
 
         const constraintsCondition = dbTables
             .map(({ table_name, table_schema }) => {
