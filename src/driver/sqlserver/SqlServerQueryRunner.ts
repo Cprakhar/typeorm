@@ -895,18 +895,11 @@ export class SqlServerQueryRunner
         const newTable = oldTable.clone()
 
         // we need database name and schema name to rename FK constraints
-        let dbName: string | undefined = undefined
-        let schemaName: string | undefined = undefined
-        let oldTableName: string = oldTable.name
-        const splittedName = oldTable.name.split(".")
-        if (splittedName.length === 3) {
-            dbName = splittedName[0]
-            oldTableName = splittedName[2]
-            if (splittedName[1] !== "") schemaName = splittedName[1]
-        } else if (splittedName.length === 2) {
-            schemaName = splittedName[0]
-            oldTableName = splittedName[1]
-        }
+        const {
+            database: dbName,
+            schema: schemaName,
+            tableName: oldTableName,
+        } = this.driver.parseTableName(oldTable)
 
         newTable.name = this.driver.buildTableName(
             newTableName,
@@ -937,6 +930,30 @@ export class SqlServerQueryRunner
                 )}", "${oldTableName}"`,
             ),
         )
+
+        const hasGeneratedColumns = oldTable.columns.some(
+            (col) => col.generatedType && col.asExpression,
+        )
+        if (hasGeneratedColumns) {
+            const updateQuery = this.updateTypeormMetadataSql({
+                database: dbName ?? currentDB,
+                schema: schemaName ?? (await this.getCurrentSchema()),
+                table: oldTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: newTableName },
+            })
+
+            const revertUpdateQuery = this.updateTypeormMetadataSql({
+                database: dbName ?? currentDB,
+                schema: schemaName ?? (await this.getCurrentSchema()),
+                table: newTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: oldTableName },
+            })
+
+            upQueries.push(updateQuery)
+            downQueries.push(revertUpdateQuery)
+        }
 
         // rename primary key constraint
         if (
@@ -1259,7 +1276,6 @@ export class SqlServerQueryRunner
 
         if (column.generatedType && column.asExpression) {
             const parsedTableName = this.driver.parseTableName(table)
-
             parsedTableName.schema ??= await this.getCurrentSchema()
 
             const insertQuery = this.insertTypeormMetadataSql({
@@ -1367,13 +1383,18 @@ export class SqlServerQueryRunner
                 `Column "${oldTableColumnOrName}" was not found in the "${table.name}" table.`,
             )
 
+        const isComputedColumn =
+            oldColumn.generatedType && oldColumn.asExpression
+
         if (
             (newColumn.isGenerated !== oldColumn.isGenerated &&
                 newColumn.generationStrategy !== "uuid") ||
             newColumn.type !== oldColumn.type ||
             newColumn.length !== oldColumn.length ||
-            newColumn.asExpression !== oldColumn.asExpression ||
-            newColumn.generatedType !== oldColumn.generatedType
+            (newColumn.asExpression ?? "").trim() !==
+                (oldColumn.asExpression ?? "").trim() ||
+            newColumn.generatedType !== oldColumn.generatedType ||
+            (isComputedColumn && newColumn.name !== oldColumn.name)
         ) {
             // SQL Server does not support changing of IDENTITY column, so we must drop column and recreate it again.
             // Also, we recreate column if column type changed
@@ -1385,15 +1406,11 @@ export class SqlServerQueryRunner
         } else {
             if (newColumn.name !== oldColumn.name) {
                 // we need database name and schema name to rename FK constraints
-                let dbName: string | undefined = undefined
-                let schemaName: string | undefined = undefined
-                const splittedName = table.name.split(".")
-                if (splittedName.length === 3) {
-                    dbName = splittedName[0]
-                    if (splittedName[1] !== "") schemaName = splittedName[1]
-                } else if (splittedName.length === 2) {
-                    schemaName = splittedName[0]
-                }
+                const {
+                    database: dbName,
+                    schema: schemaName,
+                    tableName,
+                } = this.driver.parseTableName(table)
 
                 // if we have tables with database which differs from database specified in config, we must change currently used database.
                 // This need because we can not rename objects from another database.
@@ -1418,6 +1435,27 @@ export class SqlServerQueryRunner
                         }", "${oldColumn.name}"`,
                     ),
                 )
+
+                if (oldColumn.generatedType && oldColumn.asExpression) {
+                    const updateQuery = this.updateTypeormMetadataSql({
+                        database: dbName ?? currentDB,
+                        schema: schemaName ?? (await this.getCurrentSchema()),
+                        table: tableName,
+                        type: MetadataTableType.GENERATED_COLUMN,
+                        valueToSet: { name: newColumn.name },
+                    })
+
+                    const revertUpdateQuery = this.updateTypeormMetadataSql({
+                        database: dbName ?? currentDB,
+                        schema: schemaName ?? (await this.getCurrentSchema()),
+                        table: tableName,
+                        type: MetadataTableType.GENERATED_COLUMN,
+                        valueToSet: { name: oldColumn.name },
+                    })
+
+                    upQueries.push(updateQuery)
+                    downQueries.push(revertUpdateQuery)
+                }
 
                 // rename column primary key constraint
                 if (
@@ -3053,6 +3091,8 @@ export class SqlServerQueryRunner
      * @param tableNames
      */
     protected async loadTables(tableNames?: string[]): Promise<Table[]> {
+        const hasTable = await this.hasTable(this.getTypeormMetadataTableName())
+
         // if no tables given then no need to proceed
         if (tableNames?.length === 0) {
             return []
@@ -3307,6 +3347,22 @@ export class SqlServerQueryRunner
                     (dbCollation) =>
                         dbCollation["NAME"] === dbTable["TABLE_CATALOG"],
                 )!
+
+                const dbGeneratedColumns: ObjectLiteral[] = []
+                if (hasTable) {
+                    const generatedColumnSql = this.selectTypeormMetadataSql({
+                        database: dbTable["TABLE_CATALOG"],
+                        schema: dbTable["TABLE_SCHEMA"],
+                        table: dbTable["TABLE_NAME"],
+                        type: MetadataTableType.GENERATED_COLUMN,
+                    })
+                    dbGeneratedColumns.push(
+                        ...(await this.query(
+                            generatedColumnSql.query,
+                            generatedColumnSql.parameters,
+                        )),
+                    )
+                }
 
                 // create columns from the loaded columns
                 table.columns = await Promise.all(
@@ -3582,24 +3638,14 @@ export class SqlServerQueryRunner
                                         ? "STORED"
                                         : "VIRTUAL"
                                 // We cannot relay on information_schema.columns.generation_expression, because it is formatted different.
-                                const asExpressionQuery =
-                                    this.selectTypeormMetadataSql({
-                                        database: dbTable["TABLE_CATALOG"],
-                                        schema: dbTable["TABLE_SCHEMA"],
-                                        table: dbTable["TABLE_NAME"],
-                                        type: MetadataTableType.GENERATED_COLUMN,
-                                        name: tableColumn.name,
-                                    })
-
-                                const results = await this.query(
-                                    asExpressionQuery.query,
-                                    asExpressionQuery.parameters,
-                                )
-                                if (results[0]?.value) {
-                                    tableColumn.asExpression = results[0].value
-                                } else {
-                                    tableColumn.asExpression = ""
-                                }
+                                tableColumn.asExpression =
+                                    dbGeneratedColumns.find(
+                                        (gc) =>
+                                            gc["name"] ===
+                                            dbColumn["COLUMN_NAME"],
+                                    )?.value ??
+                                    dbColumn["definition"] ??
+                                    ""
                             }
 
                             return tableColumn

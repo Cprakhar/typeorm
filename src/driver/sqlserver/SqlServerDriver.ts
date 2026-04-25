@@ -898,7 +898,8 @@ export class SqlServerDriver implements Driver {
                         )) || // we included check for generated here, because generated columns already can have default values
                 tableColumn.isPrimary !== columnMetadata.isPrimary ||
                 tableColumn.isNullable !== columnMetadata.isNullable ||
-                tableColumn.asExpression !== columnMetadata.asExpression ||
+                (tableColumn.asExpression ?? "").trim() !==
+                    (columnMetadata.asExpression ?? "").trim() ||
                 tableColumn.generatedType !== columnMetadata.generatedType ||
                 tableColumn.isUnique !==
                     this.normalizeIsUnique(columnMetadata) ||
