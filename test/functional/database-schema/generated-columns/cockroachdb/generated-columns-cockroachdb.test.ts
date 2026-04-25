@@ -269,6 +269,172 @@ describe("database schema > generated columns > cockroachdb", () => {
                         }
                     }),
                 ))
+            it("should rename generated column metadata row and revert rename", () =>
+                Promise.all(
+                    dataSources.map(async (dataSource) => {
+                        const queryRunner = dataSource.createQueryRunner()
+                        try {
+                            let table = await queryRunner.getTable("post")
+                            if (table) {
+                                await queryRunner.renameColumn(
+                                    table,
+                                    "storedFullName",
+                                    "storedFullNameRenamed",
+                                )
+                                await queryRunner.renameColumn(
+                                    table,
+                                    "virtualFullName",
+                                    "virtualFullNameRenamed",
+                                )
+                            }
+
+                            table = await queryRunner.getTable("post")
+
+                            const oldColumn =
+                                table?.findColumnByName("storedFullName")
+                            expect(oldColumn).to.be.undefined
+                            const virtualOldColumn =
+                                table?.findColumnByName("virtualFullName")
+                            expect(virtualOldColumn).to.be.undefined
+
+                            const renamedColumn = table?.findColumnByName(
+                                "storedFullNameRenamed",
+                            )
+                            const virtualRenamedColumn =
+                                table?.findColumnByName(
+                                    "virtualFullNameRenamed",
+                                )
+                            expect(virtualRenamedColumn).to.exist
+                            virtualRenamedColumn?.asExpression?.should.be.equal(
+                                `concat("firstName",' ',"lastName")`,
+                            )
+                            expect(renamedColumn).to.exist
+                            renamedColumn?.asExpression?.should.be.equal(
+                                `CONCAT("firstName",' ',"lastName")`,
+                            )
+
+                            const oldMetadataRecords = await queryRunner.query(
+                                `SELECT * FROM "${schema ?? "public"}"."typeorm_metadata" WHERE "table" = 'post' AND "name" IN ('storedFullName', 'virtualFullName') AND "schema" = '${schema ?? "public"}'`,
+                            )
+                            oldMetadataRecords.length.should.be.equal(0)
+
+                            const renamedMetadataRecords =
+                                await queryRunner.query(
+                                    `SELECT * FROM "${schema ?? "public"}"."typeorm_metadata" WHERE "table" = 'post' AND "name" IN ('storedFullNameRenamed', 'virtualFullNameRenamed') AND "schema" = '${schema ?? "public"}'`,
+                                )
+                            renamedMetadataRecords.length.should.be.equal(2)
+
+                            // revert changes
+                            await queryRunner.executeMemoryDownSql()
+
+                            table = await queryRunner.getTable("post")
+
+                            const revertedColumn =
+                                table?.findColumnByName("storedFullName")
+                            const revertedVirtualColumn =
+                                table?.findColumnByName("virtualFullName")
+                            expect(revertedVirtualColumn).to.exist
+                            revertedVirtualColumn?.asExpression?.should.be.equal(
+                                `concat("firstName",' ',"lastName")`,
+                            )
+                            expect(revertedColumn).to.exist
+                            revertedColumn?.asExpression?.should.be.equal(
+                                `CONCAT("firstName",' ',"lastName")`,
+                            )
+                            expect(
+                                table?.findColumnByName(
+                                    "storedFullNameRenamed",
+                                ),
+                            ).to.be.undefined
+                            expect(
+                                table?.findColumnByName(
+                                    "virtualFullNameRenamed",
+                                ),
+                            ).to.be.undefined
+
+                            const revertedMetadataRecords =
+                                await queryRunner.query(
+                                    `SELECT * FROM "${schema ?? "public"}"."typeorm_metadata" WHERE "table" = 'post' AND "name" IN ('storedFullName', 'virtualFullName') AND "schema" = '${schema ?? "public"}'`,
+                                )
+                            revertedMetadataRecords.length.should.be.equal(2)
+
+                            const revertedRenamedMetadataRecords =
+                                await queryRunner.query(
+                                    `SELECT * FROM "${schema ?? "public"}"."typeorm_metadata" WHERE "table" = 'post' AND "name" IN ('storedFullNameRenamed', 'virtualFullNameRenamed') AND "schema" = '${schema ?? "public"}'`,
+                                )
+                            revertedRenamedMetadataRecords.length.should.be.equal(
+                                0,
+                            )
+                        } finally {
+                            await queryRunner.release()
+                        }
+                    }),
+                ))
+
+            it("should rename table with generated columns and revert rename", () =>
+                Promise.all(
+                    dataSources.map(async (dataSource) => {
+                        const queryRunner = dataSource.createQueryRunner()
+                        try {
+                            let table = await queryRunner.getTable("post")
+                            if (table)
+                                await queryRunner.renameTable(
+                                    table,
+                                    "postRenamed",
+                                )
+
+                            table = await queryRunner.getTable("postRenamed")
+                            expect(table).to.exist
+
+                            const storedFullName =
+                                table?.findColumnByName("storedFullName")
+                            expect(storedFullName).to.exist
+                            storedFullName?.asExpression?.should.be.equal(
+                                `CONCAT("firstName",' ',"lastName")`,
+                            )
+
+                            const name = table?.findColumnByName("name")
+                            expect(name).to.exist
+                            name?.asExpression?.should.be.equal(
+                                `"firstName" || "lastName"`,
+                            )
+
+                            // check if generated column records exist in typeorm_metadata table with new table name
+                            const metadataRecords = await queryRunner.query(
+                                `SELECT * FROM "${schema ?? "public"}"."typeorm_metadata" WHERE "table" = 'postRenamed' AND "name" IN ('storedFullName', 'name') AND "schema" = '${schema ?? "public"}'`,
+                            )
+                            metadataRecords.length.should.be.equal(2)
+
+                            // revert changes
+                            await queryRunner.executeMemoryDownSql()
+
+                            table = await queryRunner.getTable("post")
+                            expect(table).to.exist
+
+                            const revertedFullName =
+                                table?.findColumnByName("storedFullName")
+                            expect(revertedFullName).to.exist
+                            revertedFullName?.asExpression?.should.be.equal(
+                                `CONCAT("firstName",' ',"lastName")`,
+                            )
+
+                            const revertedName = table?.findColumnByName("name")
+                            expect(revertedName).to.exist
+                            revertedName?.asExpression?.should.be.equal(
+                                `"firstName" || "lastName"`,
+                            )
+
+                            // check if generated column records exist in typeorm_metadata table with old table name
+                            const revertedMetadataRecords =
+                                await queryRunner.query(
+                                    `SELECT * FROM "${schema ?? "public"}"."typeorm_metadata" WHERE "table" = 'post' AND "name" IN ('storedFullName', 'name') AND "schema" = '${schema ?? "public"}'`,
+                                )
+                            revertedMetadataRecords.length.should.be.equal(2)
+                        } finally {
+                            await queryRunner.release()
+                        }
+                    }),
+                ))
 
             it("should remove data from 'typeorm_metadata' when table dropped", () =>
                 Promise.all(
