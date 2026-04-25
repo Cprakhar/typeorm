@@ -13,200 +13,81 @@ import { Person } from "./entity/Person"
 import { Question } from "./entity/Question"
 import { Answer } from "./entity/Answer"
 import { DriverUtils } from "../../../../src/driver/DriverUtils"
+import type { DatabaseType } from "../../../../src"
+import { PostWithSchema } from "./entity/PostWithSchema"
+
+function getParameterPlaceholder(dataSource: DataSource): string | undefined {
+    const driverType = dataSource.driver.options.type
+
+    if (DriverUtils.isPostgresFamily(dataSource.driver)) return "$1"
+    if (driverType === "mssql") return "@0"
+    if (driverType === "sap") return "?"
+    if (DriverUtils.isMySQLFamily(dataSource.driver)) return "?"
+
+    return undefined
+}
+
+function getExpectedSqlByDriver(
+    dataSource: DataSource,
+    expected: {
+        postgres?: string
+        mssql?: string
+        sap?: string
+        mysql?: string
+    },
+): string | undefined {
+    const driverType = dataSource.driver.options.type
+
+    if (
+        DriverUtils.isPostgresFamily(dataSource.driver) &&
+        expected.postgres !== undefined
+    ) {
+        return expected.postgres
+    }
+    if (driverType === "mssql" && expected.mssql !== undefined) {
+        return expected.mssql
+    }
+    if (driverType === "sap" && expected.sap !== undefined) {
+        return expected.sap
+    }
+    if (
+        DriverUtils.isMySQLFamily(dataSource.driver) &&
+        expected.mysql !== undefined
+    ) {
+        return expected.mysql
+    }
+
+    return undefined
+}
+
+function expectSqlByDriver(
+    dataSource: DataSource,
+    sql: string,
+    expected: {
+        parameterized?: string
+        postgres?: string
+        mssql?: string
+        sap?: string
+        mysql?: string
+    },
+) {
+    const parameterPlaceholder = getParameterPlaceholder(dataSource)
+
+    if (
+        expected.parameterized !== undefined &&
+        parameterPlaceholder !== undefined
+    ) {
+        sql.should.be.equal(
+            expected.parameterized.replaceAll(":param", parameterPlaceholder),
+        )
+        return
+    }
+
+    const expectedSql = getExpectedSqlByDriver(dataSource, expected)
+    if (expectedSql !== undefined) sql.should.be.equal(expectedSql)
+}
 
 describe("multi-schema-and-database > basic-functionality", () => {
-    describe("custom-table-schema", () => {
-        let dataSources: DataSource[]
-        before(async () => {
-            dataSources = await createTestingConnections({
-                entities: [Post, User, Category],
-                enabledDrivers: ["mssql", "postgres"],
-                schema: "custom",
-            })
-        })
-        beforeEach(() => reloadTestingDatabases(dataSources))
-        after(() => closeTestingConnections(dataSources))
-
-        it("should set the table database / schema", () =>
-            Promise.all(
-                dataSources.map(async (dataSource) => {
-                    const queryRunner = dataSource.createQueryRunner()
-                    const table = (await queryRunner.getTable("post"))!
-                    await queryRunner.release()
-
-                    expect(table.database).to.not.be.undefined
-                    expect(table.schema).to.be.equal("custom")
-                }),
-            ))
-
-        it("should correctly get the table primary keys when custom table schema used", () =>
-            Promise.all(
-                dataSources.map(async (dataSource) => {
-                    const queryRunner = dataSource.createQueryRunner()
-                    const table = (await queryRunner.getTable("post"))!
-                    await queryRunner.release()
-
-                    expect(table.primaryColumns).to.have.length(1)
-                    expect(table.findColumnByName("id")?.isGenerated).to.be.true
-                }),
-            ))
-
-        it("should correctly create tables when custom table schema used", () =>
-            Promise.all(
-                dataSources.map(async (dataSource) => {
-                    const queryRunner = dataSource.createQueryRunner()
-                    const table = await queryRunner.getTable("post")
-                    await queryRunner.release()
-
-                    const post = new Post()
-                    post.name = "Post #1"
-                    await dataSource.getRepository(Post).save(post)
-
-                    const sql = dataSource
-                        .createQueryBuilder(Post, "post")
-                        .where("post.id = :id", { id: 1 })
-                        .getSql()
-
-                    if (dataSource.driver.options.type === "postgres")
-                        sql.should.be.equal(
-                            `SELECT "post"."id" AS "post_id", "post"."name" AS "post_name" FROM "custom"."post" "post" WHERE "post"."id" = $1`,
-                        )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "post"."id" AS "post_id", "post"."name" AS "post_name" FROM "custom"."post" "post" WHERE "post"."id" = @0`,
-                        )
-
-                    table!.name.should.be.equal("custom.post")
-                }),
-            ))
-
-        it("should correctly create tables when custom table schema used in Entity decorator", () =>
-            Promise.all(
-                dataSources.map(async (dataSource) => {
-                    const queryRunner = dataSource.createQueryRunner()
-                    const table = await queryRunner.getTable("userSchema.user")
-                    await queryRunner.release()
-
-                    const user = new User()
-                    user.name = "User #1"
-                    await dataSource.getRepository(User).save(user)
-
-                    const sql = dataSource
-                        .createQueryBuilder(User, "user")
-                        .where("user.id = :id", { id: 1 })
-                        .getSql()
-
-                    if (dataSource.driver.options.type === "postgres")
-                        sql.should.be.equal(
-                            `SELECT "user"."id" AS "user_id", "user"."name" AS "user_name" FROM "userSchema"."user" "user" WHERE "user"."id" = $1`,
-                        )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "user"."id" AS "user_id", "user"."name" AS "user_name" FROM "userSchema"."user" "user" WHERE "user"."id" = @0`,
-                        )
-
-                    table!.name.should.be.equal("userSchema.user")
-                }),
-            ))
-
-        it("should correctly work with cross-schema queries", () =>
-            Promise.all(
-                dataSources.map(async (dataSource) => {
-                    const queryRunner = dataSource.createQueryRunner()
-                    const table = await queryRunner.getTable("guest.category")
-                    await queryRunner.release()
-
-                    const post = new Post()
-                    post.name = "Post #1"
-                    await dataSource.getRepository(Post).save(post)
-
-                    const category = new Category()
-                    category.name = "Category #1"
-                    category.post = post
-                    await dataSource.getRepository(Category).save(category)
-
-                    const loadedCategory = await dataSource
-                        .createQueryBuilder(Category, "category")
-                        .innerJoinAndSelect("category.post", "post")
-                        .where("category.id = :id", { id: 1 })
-                        .getOne()
-
-                    loadedCategory!.should.be.not.empty
-                    loadedCategory!.post.should.be.not.empty
-                    loadedCategory!.post.id.should.be.equal(1)
-
-                    const sql = dataSource
-                        .createQueryBuilder(Category, "category")
-                        .innerJoinAndSelect("category.post", "post")
-                        .where("category.id = :id", { id: 1 })
-                        .getSql()
-
-                    if (dataSource.driver.options.type === "postgres")
-                        sql.should.be.equal(
-                            `SELECT "category"."id" AS "category_id", "category"."name" AS "category_name",` +
-                                ` "category"."postId" AS "category_postId", "post"."id" AS "post_id", "post"."name" AS "post_name"` +
-                                ` FROM "guest"."category" "category" INNER JOIN "custom"."post" "post" ON "post"."id"="category"."postId" WHERE "category"."id" = $1`,
-                        )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "category"."id" AS "category_id", "category"."name" AS "category_name",` +
-                                ` "category"."postId" AS "category_postId", "post"."id" AS "post_id", "post"."name" AS "post_name"` +
-                                ` FROM "guest"."category" "category" INNER JOIN "custom"."post" "post" ON "post"."id"="category"."postId" WHERE "category"."id" = @0`,
-                        )
-
-                    table!.name.should.be.equal("guest.category")
-                }),
-            ))
-
-        it("should correctly work with QueryBuilder", () =>
-            Promise.all(
-                dataSources.map(async (dataSource) => {
-                    const post = new Post()
-                    post.name = "Post #1"
-                    await dataSource.getRepository(Post).save(post)
-
-                    const user = new User()
-                    user.name = "User #1"
-                    await dataSource.getRepository(User).save(user)
-
-                    const category = new Category()
-                    category.name = "Category #1"
-                    category.post = post
-                    await dataSource.getRepository(Category).save(category)
-
-                    const query = dataSource
-                        .createQueryBuilder()
-                        .select()
-                        .from(Category, "category")
-                        .addFrom(User, "user")
-                        .addFrom(Post, "post")
-                        .where("category.id = :id", { id: 1 })
-                        .andWhere("post.id = category.post")
-
-                    ;(await query.getRawOne())!.should.be.not.empty
-
-                    if (dataSource.driver.options.type === "postgres")
-                        query
-                            .getSql()
-                            .should.be.equal(
-                                `SELECT * FROM "guest"."category" "category", "userSchema"."user" "user",` +
-                                    ` "custom"."post" "post" WHERE "category"."id" = $1 AND "post"."id" = "category"."postId"`,
-                            )
-
-                    if (dataSource.driver.options.type === "mssql")
-                        query
-                            .getSql()
-                            .should.be.equal(
-                                `SELECT * FROM "guest"."category" "category", "userSchema"."user" "user",` +
-                                    ` "custom"."post" "post" WHERE "category"."id" = @0 AND "post"."id" = "category"."postId"`,
-                            )
-                }),
-            ))
-    })
-
     describe("custom-table-schema-and-database", () => {
         let dataSources: DataSource[]
         before(async () => {
@@ -354,18 +235,220 @@ describe("multi-schema-and-database > basic-functionality", () => {
                         .where("person.id = :id", { id: 1 })
                         .getSql()
 
-                    if (dataSource.driver.options.type === "mssql")
-                        sql.should.be.equal(
-                            `SELECT "person"."id" AS "person_id", "person"."name" AS "person_name" FROM "secondDB".."person" "person" WHERE "person"."id" = @0`,
-                        )
-
-                    if (DriverUtils.isMySQLFamily(dataSource.driver))
-                        sql.should.be.equal(
-                            "SELECT `person`.`id` AS `person_id`, `person`.`name` AS `person_name` FROM `secondDB`.`person` `person` WHERE `person`.`id` = ?",
-                        )
+                    expectSqlByDriver(dataSource, sql, {
+                        mssql: `SELECT "person"."id" AS "person_id", "person"."name" AS "person_name" FROM "secondDB".."person" "person" WHERE "person"."id" = @0`,
+                        mysql: "SELECT `person`.`id` AS `person_id`, `person`.`name` AS `person_name` FROM `secondDB`.`person` `person` WHERE `person`.`id` = ?",
+                    })
 
                     table!.name.should.be.equal(tablePath)
                 }),
             ))
+    })
+
+    describe("custom-table-schema", () => {
+        const drivers: DatabaseType[][] = [
+            // SAP throws error during connection if schema specified in connection options does not exist.
+            // only testing custom schema specified in Entity decorator
+            ["sap"],
+            ["mssql", "postgres", "cockroachdb"],
+        ]
+        for (const driver of drivers) {
+            describe(`${driver.join("|")}`, () => {
+                let dataSources: DataSource[]
+                before(async () => {
+                    dataSources = await createTestingConnections({
+                        entities: [User, Category, Post, PostWithSchema],
+                        enabledDrivers: driver,
+                        schema: driver.includes("sap") ? undefined : "custom",
+                    })
+                })
+                beforeEach(() => reloadTestingDatabases(dataSources))
+                after(() => closeTestingConnections(dataSources))
+
+                it("should set the table database / schema", function () {
+                    if (driver.includes("sap")) this.skip()
+
+                    return Promise.all(
+                        dataSources.map(async (dataSource) => {
+                            const queryRunner = dataSource.createQueryRunner()
+                            try {
+                                const table =
+                                    (await queryRunner.getTable("post"))!
+
+                                expect(table.database).to.not.be.undefined
+                                expect(table.schema).to.be.equal("custom")
+                                expect(table.columns).to.have.length(2)
+                            } finally {
+                                await queryRunner.release()
+                            }
+                        }),
+                    )
+                })
+
+                it("should correctly get the table primary keys when custom table schema used", () =>
+                    Promise.all(
+                        dataSources.map(async (dataSource) => {
+                            const queryRunner = dataSource.createQueryRunner()
+                            try {
+                                const table =
+                                    (await queryRunner.getTable("post"))!
+
+                                expect(table.primaryColumns).to.have.length(1)
+                                expect(
+                                    table.findColumnByName("id")?.isGenerated,
+                                ).to.be.true
+                            } finally {
+                                await queryRunner.release()
+                            }
+                        }),
+                    ))
+
+                it("should correctly create tables when custom table schema used", function () {
+                    if (driver.includes("sap")) this.skip()
+
+                    return Promise.all(
+                        dataSources.map(async (dataSource) => {
+                            const queryRunner = dataSource.createQueryRunner()
+                            try {
+                                const table = await queryRunner.getTable("post")
+
+                                const post = new Post()
+                                post.name = "Post #1"
+                                await dataSource.getRepository(Post).save(post)
+
+                                const sql = dataSource
+                                    .createQueryBuilder(Post, "post")
+                                    .where("post.id = :id", { id: 1 })
+                                    .getSql()
+
+                                expectSqlByDriver(dataSource, sql, {
+                                    parameterized: `SELECT "post"."id" AS "post_id", "post"."name" AS "post_name" FROM "custom"."post" "post" WHERE "post"."id" = :param`,
+                                })
+
+                                table!.name.should.be.equal("custom.post")
+                            } finally {
+                                await queryRunner.release()
+                            }
+                        }),
+                    )
+                })
+
+                it("should correctly create tables when custom table schema used in Entity decorator", () =>
+                    Promise.all(
+                        dataSources.map(async (dataSource) => {
+                            const queryRunner = dataSource.createQueryRunner()
+                            try {
+                                const table =
+                                    await queryRunner.getTable(
+                                        "userSchema.user",
+                                    )
+
+                                const user = new User()
+                                user.name = "User #1"
+                                await dataSource.getRepository(User).save(user)
+
+                                const sql = dataSource
+                                    .createQueryBuilder(User, "user")
+                                    .where("user.id = :id", { id: 1 })
+                                    .getSql()
+
+                                expectSqlByDriver(dataSource, sql, {
+                                    parameterized: `SELECT "user"."id" AS "user_id", "user"."name" AS "user_name" FROM "userSchema"."user" "user" WHERE "user"."id" = :param`,
+                                })
+
+                                table!.name.should.be.equal("userSchema.user")
+                            } finally {
+                                await queryRunner.release()
+                            }
+                        }),
+                    ))
+
+                it("should correctly work with cross-schema queries", () =>
+                    Promise.all(
+                        dataSources.map(async (dataSource) => {
+                            const queryRunner = dataSource.createQueryRunner()
+                            try {
+                                const table =
+                                    await queryRunner.getTable("guest.category")
+
+                                const post = new Post()
+                                post.name = "Post #1"
+                                await dataSource.getRepository(Post).save(post)
+
+                                const category = new Category()
+                                category.name = "Category #1"
+                                category.post = post
+                                await dataSource
+                                    .getRepository(Category)
+                                    .save(category)
+
+                                const loadedCategory = await dataSource
+                                    .createQueryBuilder(Category, "category")
+                                    .innerJoinAndSelect("category.post", "post")
+                                    .where("category.id = :id", { id: 1 })
+                                    .getOne()
+
+                                loadedCategory!.should.be.not.empty
+                                loadedCategory!.post.should.be.not.empty
+                                loadedCategory!.post.id.should.be.equal(1)
+
+                                const sql = dataSource
+                                    .createQueryBuilder(Category, "category")
+                                    .innerJoinAndSelect("category.post", "post")
+                                    .where("category.id = :id", { id: 1 })
+                                    .getSql()
+
+                                expectSqlByDriver(dataSource, sql, {
+                                    parameterized:
+                                        `SELECT "category"."id" AS "category_id", "category"."name" AS "category_name",` +
+                                        ` "category"."postId" AS "category_postId", "post"."id" AS "post_id", "post"."name" AS "post_name"` +
+                                        ` FROM "guest"."category" "category" INNER JOIN ${driver.includes("sap") ? "" : '"custom".'}"post" "post" ON "post"."id"="category"."postId" WHERE "category"."id" = :param`,
+                                })
+
+                                table!.name.should.be.equal("guest.category")
+                            } finally {
+                                await queryRunner.release()
+                            }
+                        }),
+                    ))
+
+                it("should correctly work with QueryBuilder", () =>
+                    Promise.all(
+                        dataSources.map(async (dataSource) => {
+                            const post = new Post()
+                            post.name = "Post #1"
+                            await dataSource.getRepository(Post).save(post)
+
+                            const user = new User()
+                            user.name = "User #1"
+                            await dataSource.getRepository(User).save(user)
+
+                            const category = new Category()
+                            category.name = "Category #1"
+                            category.post = post
+                            await dataSource
+                                .getRepository(Category)
+                                .save(category)
+
+                            const query = dataSource
+                                .createQueryBuilder()
+                                .select()
+                                .from(Category, "category")
+                                .addFrom(User, "user")
+                                .addFrom(Post, "post")
+                                .where("category.id = :id", { id: 1 })
+                                .andWhere("post.id = category.post")
+
+                            ;(await query.getRawOne())!.should.be.not.empty
+
+                            expectSqlByDriver(dataSource, query.getSql(), {
+                                parameterized:
+                                    `SELECT * FROM "guest"."category" "category", "userSchema"."user" "user",` +
+                                    ` ${driver.includes("sap") ? "" : '"custom".'}"post" "post" WHERE "category"."id" = :param AND "post"."id" = "category"."postId"`,
+                            })
+                        }),
+                    ))
+            })
+        }
     })
 })

@@ -95,8 +95,6 @@ describe("database schema > enums", () => {
                     .createSchemaBuilder()
                     .log()
 
-                console.log(sqlInMemory.upQueries)
-
                 sqlInMemory.upQueries.length.should.be.equal(0)
                 sqlInMemory.downQueries.length.should.be.equal(0)
             }),
