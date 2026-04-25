@@ -938,6 +938,30 @@ export class SqlServerQueryRunner
             ),
         )
 
+        const hasGeneratedColumns = oldTable.columns.some(
+            (col) => col.generatedType && col.asExpression,
+        )
+        if (hasGeneratedColumns) {
+            const updateQuery = this.updateTypeormMetadataSql({
+                database: dbName ?? currentDB,
+                schema: schemaName ?? (await this.getCurrentSchema()),
+                table: oldTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: newTableName },
+            })
+
+            const revertUpdateQuery = this.updateTypeormMetadataSql({
+                database: dbName ?? currentDB,
+                schema: schemaName ?? (await this.getCurrentSchema()),
+                table: newTableName,
+                type: MetadataTableType.GENERATED_COLUMN,
+                valueToSet: { table: oldTableName },
+            })
+
+            upQueries.push(updateQuery)
+            downQueries.push(revertUpdateQuery)
+        }
+
         // rename primary key constraint
         if (
             newTable.primaryColumns.length > 0 &&
@@ -1259,7 +1283,6 @@ export class SqlServerQueryRunner
 
         if (column.generatedType && column.asExpression) {
             const parsedTableName = this.driver.parseTableName(table)
-
             parsedTableName.schema ??= await this.getCurrentSchema()
 
             const insertQuery = this.insertTypeormMetadataSql({
@@ -1373,7 +1396,8 @@ export class SqlServerQueryRunner
             newColumn.type !== oldColumn.type ||
             newColumn.length !== oldColumn.length ||
             newColumn.asExpression !== oldColumn.asExpression ||
-            newColumn.generatedType !== oldColumn.generatedType
+            newColumn.generatedType !== oldColumn.generatedType ||
+            (!!oldColumn.asExpression && newColumn.name !== oldColumn.name)
         ) {
             // SQL Server does not support changing of IDENTITY column, so we must drop column and recreate it again.
             // Also, we recreate column if column type changed
