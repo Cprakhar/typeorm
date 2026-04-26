@@ -23,31 +23,24 @@ describe("multi-schema-and-database > custom-junction-schema", () => {
     it("should correctly create tables when custom table schema used", () =>
         Promise.all(
             dataSources.map(async (dataSource) => {
-                const queryRunner = dataSource.createQueryRunner()
-                try {
-                    const postTable = await queryRunner.getTable("yoman.post")
-                    const categoryTable =
-                        await queryRunner.getTable("yoman.category")
-                    const junctionMetadata = dataSource.getManyToManyMetadata(
-                        Post,
-                        "categories",
-                    )!
-                    const junctionTable = await queryRunner.getTable(
-                        "yoman." + junctionMetadata.tableName,
-                    )
-                    expect(postTable).not.to.be.undefined
-                    expect(categoryTable).not.to.be.undefined
-                    expect(junctionTable).not.to.be.undefined
-                    expect(postTable?.name).to.be.equal("yoman.post")
-                    expect(categoryTable).not.to.be.undefined
-                    expect(categoryTable?.name).to.be.equal("yoman.category")
-                    expect(junctionTable).not.to.be.undefined
-                    expect(junctionTable?.name).to.be.equal(
-                        "yoman." + junctionMetadata.tableName,
-                    )
-                } finally {
-                    await queryRunner.release()
-                }
+                await using queryRunner = dataSource.createQueryRunner()
+
+                const postTable = await queryRunner.getTable("yoman.post")
+                const categoryTable =
+                    await queryRunner.getTable("yoman.category")
+                const junctionMetadata = dataSource.getManyToManyMetadata(
+                    Post,
+                    "categories",
+                )!
+                const junctionTable = await queryRunner.getTable(
+                    "yoman." + junctionMetadata.tableName,
+                )
+
+                expect(postTable!.name).to.be.equal("yoman.post")
+                expect(categoryTable!.name).to.be.equal("yoman.category")
+                expect(junctionTable!.name).to.be.equal(
+                    "yoman." + junctionMetadata.tableName,
+                )
             }),
         ))
 })
