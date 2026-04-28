@@ -71,6 +71,11 @@ import type { ColumnMetadata } from "../metadata/ColumnMetadata"
 export class MongoEntityManager extends EntityManager {
     readonly "@instanceof" = Symbol.for("MongoEntityManager")
 
+    private readonly cursorQueues = new WeakMap<
+        FindCursor<any> | AggregationCursor<any>,
+        Promise<void>
+    >()
+
     get mongoQueryRunner(): MongoQueryRunner {
         return (this.dataSource.driver as MongoDriver)
             .queryRunner as MongoQueryRunner
@@ -1310,10 +1315,15 @@ export class MongoEntityManager extends EntityManager {
         cursor: FindCursor<Entity> | AggregationCursor<Entity>,
     ) {
         const transformer = new DocumentToEntityTransformer()
+        const originalToArray = cursor.toArray.bind(cursor)
         const originalNext = cursor.next.bind(cursor)
+
+        this.cursorQueues.set(cursor, Promise.resolve())
 
         cursor.toArray = () =>
             this.toArray(
+                cursor,
+                originalToArray,
                 originalNext,
                 transformer,
                 metadata,
@@ -1321,6 +1331,7 @@ export class MongoEntityManager extends EntityManager {
             )
         cursor.next = () =>
             this.next(
+                cursor,
                 originalNext,
                 transformer,
                 metadata,
@@ -1497,48 +1508,81 @@ export class MongoEntityManager extends EntityManager {
     }
 
     private async toArray<Entity>(
+        cursor: FindCursor<Entity> | AggregationCursor<Entity>,
+        originalToArray: () => Promise<Entity[]>,
         originalNext: () => Promise<Entity | null>,
         transformer: DocumentToEntityTransformer,
         metadata: EntityMetadata,
         queryRunner: MongoQueryRunner,
     ): Promise<Entity[]> {
-        const documents: Entity[] = []
-        let doc: Entity | null
+        const prevQueue = this.cursorQueues.get(cursor) ?? Promise.resolve()
+        let currentResolve: () => void
+        const currentQueue = new Promise<void>((resolve) => {
+            currentResolve = resolve
+        })
+        this.cursorQueues.set(cursor, currentQueue)
 
-        do {
-            doc = await originalNext()
-            if (doc !== null) {
-                documents.push(doc)
+        try {
+            await prevQueue
+
+            const patchedNext = cursor.next.bind(cursor)
+            cursor.next = originalNext
+
+            let documents: Entity[]
+            try {
+                documents = await originalToArray()
+            } finally {
+                cursor.next = patchedNext
             }
-        } while (doc !== null)
 
-        const entities = transformer
-            .transformAll(documents as ObjectLiteral[], metadata)
-            .filter((entity) => entity !== null)
+            const entities = transformer
+                .transformAll(documents as ObjectLiteral[], metadata)
+                .filter((entity) => entity !== null)
 
-        if (entities.length > 0)
-            await queryRunner.broadcaster.broadcast("Load", metadata, entities)
+            if (entities.length > 0)
+                await queryRunner.broadcaster.broadcast(
+                    "Load",
+                    metadata,
+                    entities,
+                )
 
-        return entities
+            return entities
+        } finally {
+            currentResolve!()
+        }
     }
 
     private async next<Entity>(
+        cursor: FindCursor<Entity> | AggregationCursor<Entity>,
         originalNext: () => Promise<Entity | null>,
         transformer: DocumentToEntityTransformer,
         metadata: EntityMetadata,
         queryRunner: MongoQueryRunner,
     ): Promise<Entity | null> {
-        const document = await originalNext()
-        if (document === null) return null
+        const prevQueue = this.cursorQueues.get(cursor) ?? Promise.resolve()
+        let currentResolve: () => void
+        const currentQueue = new Promise<void>((resolve) => {
+            currentResolve = resolve
+        })
+        this.cursorQueues.set(cursor, currentQueue)
 
-        const entity = transformer.transform(
-            document as ObjectLiteral,
-            metadata,
-        )
-        if (entity === null) return null
+        try {
+            await prevQueue
 
-        await queryRunner.broadcaster.broadcast("Load", metadata, [entity])
+            const document = await originalNext()
+            if (document === null) return null
 
-        return entity
+            const entity = transformer.transform(
+                document as ObjectLiteral,
+                metadata,
+            )
+            if (entity === null) return null
+
+            await queryRunner.broadcaster.broadcast("Load", metadata, [entity])
+
+            return entity
+        } finally {
+            currentResolve!()
+        }
     }
 }
